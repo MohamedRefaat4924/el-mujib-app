@@ -33,18 +33,19 @@ import { useContacts } from '@/lib/stores/contacts-store';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { ChatMessage } from '@/lib/types';
 
-// Recording preset that produces AAC files
+// Recording preset - platform-specific formats:
+// iOS: MPEG4AAC codec always produces M4A/MP4 container → send as audio/mp4 with .m4a
+// Android: aac_adts produces raw ADTS AAC bitstream → send as audio/aac with .aac
 // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-// Flutter uses .aac extension with audio/aac MIME type - we match exactly.
-// On iOS: .aac extension tells AVAudioRecorder to produce ADTS AAC stream
-// On Android: 'aac_adts' output format produces raw AAC bitstream
-const AAC_RECORDING_PRESET = {
-  extension: '.aac',
+const VOICE_RECORDING_PRESET = {
+  // iOS produces M4A regardless of extension, so use .m4a
+  // Android with aac_adts produces raw AAC, use .aac
+  extension: Platform.OS === 'ios' ? '.m4a' : '.aac',
   sampleRate: 44100,
   numberOfChannels: 1, // mono for voice messages
   bitRate: 128000,
   android: {
-    outputFormat: 'aac_adts' as const, // Raw AAC bitstream (ADTS) - NOT in MP4 container
+    outputFormat: 'aac_adts' as const, // Raw AAC bitstream (ADTS)
     audioEncoder: 'aac' as const,
   },
   ios: {
@@ -59,6 +60,12 @@ const AAC_RECORDING_PRESET = {
     bitsPerSecond: 128000,
   },
 };
+
+// Platform-specific MIME type for voice recordings
+// iOS MPEG4AAC → M4A container → audio/mp4
+// Android aac_adts → raw ADTS AAC → audio/aac
+const VOICE_MIME_TYPE = Platform.OS === 'ios' ? 'audio/mp4' : 'audio/aac';
+const VOICE_EXTENSION = Platform.OS === 'ios' ? '.m4a' : '.aac';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -104,7 +111,7 @@ export default function ChatScreen() {
   const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
 
   // expo-audio recorder hook with custom AAC preset
-  const audioRecorder = useAudioRecorder(AAC_RECORDING_PRESET);
+  const audioRecorder = useAudioRecorder(VOICE_RECORDING_PRESET);
   const recorderState = useAudioRecorderState(audioRecorder, 500);
 
   const contactUid = params.contactUid || '';
@@ -281,12 +288,12 @@ export default function ChatScreen() {
             {
               text: 'Send Now',
               onPress: async () => {
-                // Send as audio/aac - matching Flutter exactly
+                // Platform-specific MIME: iOS=audio/mp4 (M4A), Android=audio/aac (ADTS)
                 // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
                 await sendMediaMessage(contactUid, {
                   uri,
-                  mimeType: 'audio/aac',
-                  fileName: `voice_${Date.now()}.aac`,
+                  mimeType: VOICE_MIME_TYPE,
+                  fileName: `voice_${Date.now()}${VOICE_EXTENSION}`,
                 }, 'audio');
                 setTimeout(() => {
                   fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -345,8 +352,8 @@ export default function ChatScreen() {
     try {
       await sendMediaMessage(contactUid, {
         uri: voice.uri,
-        mimeType: 'audio/aac',
-        fileName: `${voice.name}.aac`,
+        mimeType: VOICE_MIME_TYPE,
+        fileName: `${voice.name}${VOICE_EXTENSION}`,
       }, 'audio');
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
