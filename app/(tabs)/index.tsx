@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/lib/stores/auth-store';
 import { useContacts } from '@/lib/stores/contacts-store';
-import { initPusher, subscribeToChannel, removeListener, disconnectPusher } from '@/lib/services/pusher';
+import { initPusher, subscribeToChannel, disconnectPusher } from '@/lib/services/pusher';
 import { getApiUrl } from '@/lib/services/api';
 import { ScreenContainer } from '@/components/screen-container';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +42,15 @@ export default function ContactsScreen() {
   const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const pusherInitRef = useRef(false);
+  // Use refs to avoid stale closures in Pusher callbacks
+  const contactExistsRef = useRef(contactExists);
+  const fetchSingleContactRef = useRef(fetchSingleContact);
+  const updateContactNewMessageRef = useRef(updateContactNewMessage);
+  useEffect(() => {
+    contactExistsRef.current = contactExists;
+    fetchSingleContactRef.current = fetchSingleContact;
+    updateContactNewMessageRef.current = updateContactNewMessage;
+  });
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -86,13 +95,15 @@ export default function ContactsScreen() {
         const channelName = `private-vendor-channel.${vendorUid}`;
         subscribeToChannel(channelName, {
           onEvent: (eventName, eventData) => {
+            console.log('[Home] Pusher event received:', eventName, JSON.stringify(eventData).substring(0, 200));
             if (eventName === 'VendorChannelBroadcast' && !eventData?.message_status) {
               const contactUid = eventData?.contactUid;
               if (contactUid) {
-                if (!contactExists(contactUid)) {
-                  fetchSingleContact(contactUid, vendorUid);
+                // Use refs to get latest function references (avoids stale closures)
+                if (!contactExistsRef.current(contactUid)) {
+                  fetchSingleContactRef.current(contactUid, vendorUid);
                 } else {
-                  updateContactNewMessage(
+                  updateContactNewMessageRef.current(
                     contactUid,
                     eventData?.lastMessageUid || '',
                     eventData?.formatted_last_message_time || ''
@@ -104,7 +115,7 @@ export default function ContactsScreen() {
           onSubscriptionError: (error) => {
             console.error('[Pusher] Subscription error:', error);
           },
-        }, 'home-contacts');
+        });
       }
     } catch (e) {
       console.error('Pusher init error:', e);

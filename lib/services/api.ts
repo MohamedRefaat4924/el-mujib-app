@@ -322,9 +322,9 @@ export async function uploadFile(
       if (!acceptedAudioTypes.includes(mimeType)) {
         // Map common unsupported types to accepted ones
         const mimeMap: Record<string, string> = {
-          'audio/m4a': 'audio/aac',
-          'audio/x-m4a': 'audio/aac',
-          'audio/mp4a-latm': 'audio/aac',
+          'audio/m4a': 'audio/mp4',
+          'audio/x-m4a': 'audio/mp4',
+          'audio/mp4a-latm': 'audio/mp4',
           'audio/wav': 'audio/ogg',
           'audio/x-wav': 'audio/ogg',
           'audio/webm': 'audio/ogg',
@@ -340,13 +340,19 @@ export async function uploadFile(
       // Also ensure file extension matches the MIME type
       const mimeToExt: Record<string, string> = {
         'audio/aac': '.aac',
-        'audio/mp4': '.mp4',
+        'audio/mp4': '.m4a',
         'audio/mpeg': '.mp3',
         'audio/amr': '.amr',
         'audio/ogg': '.ogg',
       };
+      // For audio/mp4, both .m4a and .mp4 are valid
+      const validExts: Record<string, string[]> = {
+        'audio/mp4': ['.m4a', '.mp4'],
+      };
       const expectedExt = mimeToExt[sanitizedMimeType];
-      if (expectedExt && !sanitizedFileName.toLowerCase().endsWith(expectedExt)) {
+      const validExtList = validExts[sanitizedMimeType] || (expectedExt ? [expectedExt] : []);
+      const currentExt = sanitizedFileName.substring(sanitizedFileName.lastIndexOf('.')).toLowerCase();
+      if (expectedExt && !validExtList.includes(currentExt)) {
         // Replace or add the correct extension
         const dotIdx = sanitizedFileName.lastIndexOf('.');
         sanitizedFileName = (dotIdx > 0 ? sanitizedFileName.substring(0, dotIdx) : sanitizedFileName) + expectedExt;

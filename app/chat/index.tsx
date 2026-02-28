@@ -22,7 +22,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/stores/auth-store';
 import { useChat, SavedVoiceMessage } from '@/lib/stores/chat-store';
 import { useContacts } from '@/lib/stores/contacts-store';
-import { subscribeToChannel, removeListener } from '@/lib/services/pusher';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { ChatMessage } from '@/lib/types';
 
@@ -97,38 +96,20 @@ export default function ChatScreen() {
     };
   }, [contactUid, vendorUid]);
 
-  // Subscribe to real-time updates for this contact
+  // Poll for new messages while chat is open (every 5 seconds)
+  // This avoids interfering with the home page's Pusher subscription
   useEffect(() => {
     if (!vendorUid || !contactUid) return;
 
-    const channelName = `private-vendor-channel.${vendorUid}`;
-    const chatListenerId = `chat-${contactUid}`;
-    
-    // Subscribe to the vendor channel and listen for messages for this contact
-    subscribeToChannel(channelName, {
-      onEvent: (eventName, eventData) => {
-        if (eventName === 'VendorChannelBroadcast' && !eventData?.message_status) {
-          const eventContactUid = eventData?.contactUid;
-          // If the message is for the current open chat, refresh messages
-          if (eventContactUid === contactUid) {
-            console.log('[Chat] Real-time message received for current contact, refreshing...');
-            fetchMessages(vendorUid, contactUid, { isRefresh: true });
-            // Also mark as read since user is viewing this chat
-            updateUnreadToZero(contactUid);
-          }
-        }
-      },
-      onSubscriptionError: (error) => {
-        console.error('[Chat] Pusher subscription error:', error);
-      },
-    }, chatListenerId);
+    const pollInterval = setInterval(() => {
+      fetchMessages(vendorUid, contactUid, { isRefresh: true });
+    }, 5000);
 
     return () => {
+      clearInterval(pollInterval);
       saveCachedMessages(contactUid);
-      // Remove only the chat listener, keep the home page listener active
-      removeListener(channelName, chatListenerId);
     };
-  }, [vendorUid, contactUid, fetchMessages, updateUnreadToZero, saveCachedMessages]);
+  }, [vendorUid, contactUid, fetchMessages, saveCachedMessages]);
 
   const handleSendText = useCallback(async () => {
     const text = messageText.trim();
@@ -234,38 +215,12 @@ export default function ChatScreen() {
         playsInSilentModeIOS: true,
       });
 
-      // Custom recording options to produce AAC format that the server accepts
+      // Use HIGH_QUALITY preset which is well-tested across platforms
+      // HIGH_QUALITY on iOS: .m4a extension, MPEG4AAC format -> audio/mp4 (server accepts this)
+      // HIGH_QUALITY on Android: .m4a extension, MPEG_4 format with AAC encoder -> audio/mp4
       // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-      // Flutter uses .aac extension with audio/aac MIME type
-      const AAC_RECORDING_OPTIONS = {
-        isMeteringEnabled: true,
-        android: {
-          extension: '.aac',
-          outputFormat: 6, // AAC_ADTS
-          audioEncoder: 3, // AAC
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: '.aac',
-          outputFormat: 'aac', // IOSOutputFormat.MPEG4AAC
-          audioQuality: 127, // IOSAudioQuality.MAX
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: 128000,
-        },
-      };
-
       const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(AAC_RECORDING_OPTIONS as any);
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
       audioRecorderRef.current = recording;
       setIsRecording(true);
@@ -276,22 +231,7 @@ export default function ChatScreen() {
       }, 1000);
     } catch (e) {
       console.error('Recording start error:', e);
-      // Fallback: try HIGH_QUALITY if custom options fail
-      try {
-        const { Audio } = await import('expo-av');
-        const recording = new Audio.Recording();
-        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        await recording.startAsync();
-        audioRecorderRef.current = recording;
-        setIsRecording(true);
-        setRecordingDuration(0);
-        recordingTimerRef.current = setInterval(() => {
-          setRecordingDuration(prev => prev + 1);
-        }, 1000);
-      } catch (fallbackErr) {
-        console.error('Recording fallback error:', fallbackErr);
-        Alert.alert('Error', 'Could not start recording. Please check microphone permissions.');
-      }
+      Alert.alert('Error', 'Could not start recording. Please check microphone permissions.');
     }
   }, []);
 
@@ -321,11 +261,11 @@ export default function ChatScreen() {
               text: 'Send Now',
               onPress: async () => {
                 // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-                // Recording is in AAC format (.aac extension)
+                // HIGH_QUALITY preset produces .m4a (MPEG4 AAC) -> audio/mp4
                 await sendMediaMessage(contactUid, {
                   uri,
-                  mimeType: 'audio/aac',
-                  fileName: 'voice_message.aac',
+                  mimeType: 'audio/mp4',
+                  fileName: 'voice_message.m4a',
                 }, 'audio');
                 setTimeout(() => {
                   fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -395,8 +335,8 @@ export default function ChatScreen() {
     try {
       await sendMediaMessage(contactUid, {
         uri: voice.uri,
-        mimeType: 'audio/aac',
-        fileName: `${voice.name}.aac`,
+        mimeType: 'audio/mp4',
+        fileName: `${voice.name}.m4a`,
       }, 'audio');
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });

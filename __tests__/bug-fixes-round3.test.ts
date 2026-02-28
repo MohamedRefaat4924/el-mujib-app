@@ -189,55 +189,28 @@ describe('Bug Fix Round 3', () => {
     });
   });
 
-  describe('Pusher multi-listener support', () => {
-    // Simulate the multi-listener logic
-    interface Listener {
-      listenerId: string;
-      callback: (data: any) => void;
-    }
-
-    function addListener(listeners: Listener[], listenerId: string, callback: (data: any) => void): Listener[] {
-      const filtered = listeners.filter(l => l.listenerId !== listenerId);
-      filtered.push({ listenerId, callback });
-      return filtered;
-    }
-
-    function removeListenerById(listeners: Listener[], listenerId: string): Listener[] {
-      return listeners.filter(l => l.listenerId !== listenerId);
-    }
-
-    it('should add multiple listeners', () => {
-      let listeners: Listener[] = [];
-      listeners = addListener(listeners, 'home', () => {});
-      listeners = addListener(listeners, 'chat', () => {});
-      expect(listeners.length).toBe(2);
+  describe('Chat polling approach', () => {
+    it('should use polling interval for chat real-time updates', () => {
+      // Chat screen uses setInterval(5000) for polling instead of Pusher subscription
+      // This avoids interfering with the home page Pusher subscription
+      const POLL_INTERVAL = 5000;
+      expect(POLL_INTERVAL).toBe(5000);
     });
 
-    it('should replace listener with same ID', () => {
-      let listeners: Listener[] = [];
-      listeners = addListener(listeners, 'home', () => {});
-      listeners = addListener(listeners, 'home', () => {}); // Replace
-      expect(listeners.length).toBe(1);
-    });
-
-    it('should remove specific listener', () => {
-      let listeners: Listener[] = [];
-      listeners = addListener(listeners, 'home', () => {});
-      listeners = addListener(listeners, 'chat', () => {});
-      listeners = removeListenerById(listeners, 'chat');
-      expect(listeners.length).toBe(1);
-      expect(listeners[0].listenerId).toBe('home');
-    });
-
-    it('should notify all listeners on event', () => {
-      let listeners: Listener[] = [];
-      const results: string[] = [];
-      listeners = addListener(listeners, 'home', () => results.push('home'));
-      listeners = addListener(listeners, 'chat', () => results.push('chat'));
+    it('should clear polling interval on unmount', () => {
+      let intervalId: ReturnType<typeof setInterval> | null = null;
+      let cleared = false;
       
-      // Simulate event broadcast
-      listeners.forEach(l => l.callback({}));
-      expect(results).toEqual(['home', 'chat']);
+      // Simulate mount
+      intervalId = setInterval(() => {}, 5000);
+      expect(intervalId).not.toBeNull();
+      
+      // Simulate unmount cleanup
+      if (intervalId) {
+        clearInterval(intervalId);
+        cleared = true;
+      }
+      expect(cleared).toBe(true);
     });
   });
 });

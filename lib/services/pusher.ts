@@ -13,16 +13,7 @@ interface SubscriptionCallbacks {
   onSubscriptionError?: ErrorCallback;
 }
 
-// Support multiple listeners per channel using listenerId
-interface ChannelListener {
-  listenerId: string;
-  callbacks: SubscriptionCallbacks;
-}
-
-// Map of channelName -> array of listeners
-const channelListeners: Map<string, ChannelListener[]> = new Map();
-// Track which channels are already subscribed at the Pusher level
-const subscribedChannels: Set<string> = new Set();
+const channelSubscriptions: Map<string, SubscriptionCallbacks> = new Map();
 
 // Soketi configuration from Flutter app_config.dart configItems
 const SOKETI_CONFIG = {
@@ -94,20 +85,9 @@ export async function initPusher(options?: {
   }
 }
 
-/**
- * Subscribe to a channel with a unique listener ID.
- * Multiple listeners can subscribe to the same channel.
- * The actual Pusher subscription only happens once per channel.
- * 
- * @param channelName - The Pusher channel name
- * @param callbacks - Event and error callbacks
- * @param listenerId - Unique ID for this listener (e.g., 'home', 'chat-screen')
- *                     If not provided, defaults to 'default' (backward compatible)
- */
 export function subscribeToChannel(
   channelName: string,
-  callbacks: SubscriptionCallbacks,
-  listenerId: string = 'default'
+  callbacks: SubscriptionCallbacks
 ): void {
   if (!pusherInstance) {
     console.error('[Pusher] Not initialized');
@@ -115,76 +95,30 @@ export function subscribeToChannel(
   }
 
   try {
-    // Add this listener to the channel's listener list
-    const listeners = channelListeners.get(channelName) || [];
-    // Remove existing listener with same ID (replace)
-    const filteredListeners = listeners.filter(l => l.listenerId !== listenerId);
-    filteredListeners.push({ listenerId, callbacks });
-    channelListeners.set(channelName, filteredListeners);
+    const channel = pusherInstance.subscribe(channelName);
 
-    // Only subscribe at the Pusher level if not already subscribed
-    if (!subscribedChannels.has(channelName)) {
-      const channel = pusherInstance.subscribe(channelName);
+    channel.bind_global((eventName: string, data: any) => {
+      // Skip internal pusher events
+      if (eventName.startsWith('pusher:')) return;
 
-      channel.bind_global((eventName: string, data: any) => {
-        // Skip internal pusher events
-        if (eventName.startsWith('pusher:')) return;
+      console.log(`[Pusher] Event on ${channelName}:`, eventName);
+      callbacks.onEvent(eventName, data);
+    });
 
-        console.log(`[Pusher] Event on ${channelName}:`, eventName);
-        
-        // Notify ALL listeners for this channel
-        const currentListeners = channelListeners.get(channelName) || [];
-        currentListeners.forEach(listener => {
-          try {
-            listener.callbacks.onEvent(eventName, data);
-          } catch (err) {
-            console.error(`[Pusher] Error in listener ${listener.listenerId}:`, err);
-          }
-        });
-      });
+    channel.bind('pusher:subscription_error', (error: any) => {
+      console.error(`[Pusher] Subscription error on ${channelName}:`, error);
+      if (callbacks.onSubscriptionError) {
+        callbacks.onSubscriptionError(error);
+      }
+    });
 
-      channel.bind('pusher:subscription_error', (error: any) => {
-        console.error(`[Pusher] Subscription error on ${channelName}:`, error);
-        const currentListeners = channelListeners.get(channelName) || [];
-        currentListeners.forEach(listener => {
-          if (listener.callbacks.onSubscriptionError) {
-            listener.callbacks.onSubscriptionError(error);
-          }
-        });
-      });
+    channel.bind('pusher:subscription_succeeded', () => {
+      console.log(`[Pusher] Subscribed to ${channelName}`);
+    });
 
-      channel.bind('pusher:subscription_succeeded', () => {
-        console.log(`[Pusher] Subscribed to ${channelName}`);
-      });
-
-      subscribedChannels.add(channelName);
-    }
-
-    console.log(`[Pusher] Listener '${listenerId}' added to ${channelName} (total: ${(channelListeners.get(channelName) || []).length})`);
+    channelSubscriptions.set(channelName, callbacks);
   } catch (error) {
     console.error(`[Pusher] Subscribe error for ${channelName}:`, error);
-  }
-}
-
-/**
- * Remove a specific listener from a channel.
- * The Pusher subscription is only removed when no listeners remain.
- */
-export function removeListener(channelName: string, listenerId: string): void {
-  const listeners = channelListeners.get(channelName) || [];
-  const filtered = listeners.filter(l => l.listenerId !== listenerId);
-  
-  if (filtered.length > 0) {
-    channelListeners.set(channelName, filtered);
-    console.log(`[Pusher] Listener '${listenerId}' removed from ${channelName} (remaining: ${filtered.length})`);
-  } else {
-    // No more listeners - unsubscribe from the channel
-    channelListeners.delete(channelName);
-    if (pusherInstance && subscribedChannels.has(channelName)) {
-      pusherInstance.unsubscribe(channelName);
-      subscribedChannels.delete(channelName);
-      console.log(`[Pusher] Unsubscribed from ${channelName} (no listeners left)`);
-    }
   }
 }
 
@@ -193,8 +127,7 @@ export function unsubscribeFromChannel(channelName: string): void {
 
   try {
     pusherInstance.unsubscribe(channelName);
-    channelListeners.delete(channelName);
-    subscribedChannels.delete(channelName);
+    channelSubscriptions.delete(channelName);
     console.log(`[Pusher] Unsubscribed from ${channelName}`);
   } catch (error) {
     console.error(`[Pusher] Unsubscribe error for ${channelName}:`, error);
@@ -206,8 +139,7 @@ export function disconnectPusher(): void {
     pusherInstance.disconnect();
     isInitialized = false;
     isConnected = false;
-    channelListeners.clear();
-    subscribedChannels.clear();
+    channelSubscriptions.clear();
     pusherInstance = null;
     console.log('[Pusher] Disconnected and cleaned up');
   }

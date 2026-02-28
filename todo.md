@@ -64,3 +64,5 @@
 - [x] Bug: Voice recording 406 error - changed to AAC format (.aac extension, audio/aac MIME), added robust MIME sanitization with fallback mapping
 - [x] Bug: New messages not appearing in real-time in chat - added Pusher listener in chat screen with multi-listener support
 - [x] Bug: Duplicate contacts in home page - fixed contactExists to check both key and _uid, fixed ADD_NEW_CONTACT and UPDATE_CONTACT_NEW_MESSAGE to prevent duplicates
+- [x] Bug: Audio upload 406 - switched to HIGH_QUALITY preset (.m4a/audio/mp4), fixed MIME sanitization mapping
+- [x] Bug: Real-time messages not working - reverted Pusher to original simple version, added 5s polling in chat screen, fixed stale closure refs in home page
