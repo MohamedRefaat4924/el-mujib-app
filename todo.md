@@ -72,3 +72,4 @@
 - [x] Profile: Add update notes field (text input for contact notes) - fixed API endpoints to match Flutter, notes from __data.contact_notes
 - [x] Add inline audio waveform player in chat bubbles for voice messages (InlineAudioPlayer component with play/pause, progress waveform, duration display)
 - [x] Fix audio upload 406 by converting recording to raw AAC format before upload (expo-audio useAudioRecorder with aac_adts preset, .aac extension, audio/aac MIME)
+- [x] Bug: Audio upload rejected - server only accepts audio/mp4, audio/mpeg, audio/amr, audio/ogg (NOT audio/aac) - fixed MIME sanitization to map audio/aac → audio/ogg

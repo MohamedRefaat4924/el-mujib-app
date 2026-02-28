@@ -314,14 +314,17 @@ export async function uploadFile(
     const headers = await getMultipartHeaders();
     const formData = new FormData();
 
-    // Sanitize audio MIME types - server only accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+    // Sanitize audio MIME types - server only accepts: audio/mp4, audio/mpeg, audio/amr, audio/ogg
+    // Note: audio/aac is NOT accepted by the server despite being a valid MIME type
     let sanitizedMimeType = mimeType;
     let sanitizedFileName = fileName;
     if (uploadUrl.includes('whatsapp_audio') || uploadUrl.includes('audio')) {
-      const acceptedAudioTypes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+      const acceptedAudioTypes = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
       if (!acceptedAudioTypes.includes(mimeType)) {
-        // Map common unsupported types to accepted ones
+        // Map all unsupported types to accepted ones
+        // audio/aac → audio/ogg (server rejects audio/aac!)
         const mimeMap: Record<string, string> = {
+          'audio/aac': 'audio/ogg',
           'audio/m4a': 'audio/mp4',
           'audio/x-m4a': 'audio/mp4',
           'audio/mp4a-latm': 'audio/mp4',
@@ -330,24 +333,25 @@ export async function uploadFile(
           'audio/webm': 'audio/ogg',
           'audio/3gpp': 'audio/amr',
           'audio/3gpp2': 'audio/amr',
-          'audio/caf': 'audio/aac',
-          'audio/x-caf': 'audio/aac',
-          'application/octet-stream': 'audio/aac',
+          'audio/caf': 'audio/ogg',
+          'audio/x-caf': 'audio/ogg',
+          'application/octet-stream': 'audio/ogg',
         };
-        sanitizedMimeType = mimeMap[mimeType] || 'audio/aac';
+        sanitizedMimeType = mimeMap[mimeType] || 'audio/ogg';
         console.log(`[Upload] Sanitized audio MIME type: ${mimeType} → ${sanitizedMimeType}`);
       }
       // Also ensure file extension matches the MIME type
       const mimeToExt: Record<string, string> = {
-        'audio/aac': '.aac',
         'audio/mp4': '.m4a',
         'audio/mpeg': '.mp3',
         'audio/amr': '.amr',
         'audio/ogg': '.ogg',
       };
       // For audio/mp4, both .m4a and .mp4 are valid
+      // For audio/ogg, .aac and .ogg are both acceptable (AAC content in ogg MIME)
       const validExts: Record<string, string[]> = {
         'audio/mp4': ['.m4a', '.mp4'],
+        'audio/ogg': ['.ogg', '.aac'],
       };
       const expectedExt = mimeToExt[sanitizedMimeType];
       const validExtList = validExts[sanitizedMimeType] || (expectedExt ? [expectedExt] : []);

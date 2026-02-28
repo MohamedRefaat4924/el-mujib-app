@@ -54,9 +54,11 @@ describe('AAC Recording Preset', () => {
 
 // Test the MIME type sanitization logic from api.ts
 describe('Audio MIME Type Sanitization', () => {
-  const acceptedAudioTypes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+  // Server only accepts these 4 types (audio/aac is NOT accepted!)
+  const acceptedAudioTypes = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
   
   const mimeMap: Record<string, string> = {
+    'audio/aac': 'audio/ogg',
     'audio/m4a': 'audio/mp4',
     'audio/x-m4a': 'audio/mp4',
     'audio/mp4a-latm': 'audio/mp4',
@@ -65,18 +67,18 @@ describe('Audio MIME Type Sanitization', () => {
     'audio/webm': 'audio/ogg',
     'audio/3gpp': 'audio/amr',
     'audio/3gpp2': 'audio/amr',
-    'audio/caf': 'audio/aac',
-    'audio/x-caf': 'audio/aac',
-    'application/octet-stream': 'audio/aac',
+    'audio/caf': 'audio/ogg',
+    'audio/x-caf': 'audio/ogg',
+    'application/octet-stream': 'audio/ogg',
   };
 
   function sanitizeMimeType(mimeType: string): string {
     if (acceptedAudioTypes.includes(mimeType)) return mimeType;
-    return mimeMap[mimeType] || 'audio/aac';
+    return mimeMap[mimeType] || 'audio/ogg';
   }
 
-  it('should pass through accepted audio/aac', () => {
-    expect(sanitizeMimeType('audio/aac')).toBe('audio/aac');
+  it('should map audio/aac to audio/ogg (server rejects audio/aac)', () => {
+    expect(sanitizeMimeType('audio/aac')).toBe('audio/ogg');
   });
 
   it('should pass through accepted audio/mp4', () => {
@@ -87,6 +89,10 @@ describe('Audio MIME Type Sanitization', () => {
     expect(sanitizeMimeType('audio/mpeg')).toBe('audio/mpeg');
   });
 
+  it('should pass through accepted audio/ogg', () => {
+    expect(sanitizeMimeType('audio/ogg')).toBe('audio/ogg');
+  });
+
   it('should map audio/m4a to audio/mp4', () => {
     expect(sanitizeMimeType('audio/m4a')).toBe('audio/mp4');
   });
@@ -95,13 +101,13 @@ describe('Audio MIME Type Sanitization', () => {
     expect(sanitizeMimeType('audio/webm')).toBe('audio/ogg');
   });
 
-  it('should map application/octet-stream to audio/aac', () => {
-    expect(sanitizeMimeType('application/octet-stream')).toBe('audio/aac');
+  it('should map application/octet-stream to audio/ogg', () => {
+    expect(sanitizeMimeType('application/octet-stream')).toBe('audio/ogg');
   });
 
-  it('should default unknown types to audio/aac', () => {
-    expect(sanitizeMimeType('audio/unknown')).toBe('audio/aac');
-    expect(sanitizeMimeType('video/mp4')).toBe('audio/aac');
+  it('should default unknown types to audio/ogg', () => {
+    expect(sanitizeMimeType('audio/unknown')).toBe('audio/ogg');
+    expect(sanitizeMimeType('video/mp4')).toBe('audio/ogg');
   });
 });
 
