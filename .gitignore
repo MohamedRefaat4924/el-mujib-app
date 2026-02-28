@@ -12,7 +12,7 @@ expo-env.d.ts
 # Native
 .kotlin/
 *.orig.*
-*.jks
+# *.jks - included for signing
 *.p8
 *.p12
 *.key

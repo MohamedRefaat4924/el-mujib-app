@@ -2,29 +2,10 @@
 import "./scripts/load-env.js";
 import type { ExpoConfig } from "expo/config";
 
-// Bundle ID format: space.manus.<project_name_dots>.<timestamp>
-// e.g., "my-app" created at 2024-01-15 10:30:45 -> "space.manus.my.app.t20240115103045"
-// Bundle ID can only contain letters, numbers, and dots
-// Android requires each dot-separated segment to start with a letter
-const rawBundleId = "space.manus.el.mujib.app.t20260228050431";
-const bundleId =
-  rawBundleId
-    .replace(/[-_]/g, ".") // Replace hyphens/underscores with dots
-    .replace(/[^a-zA-Z0-9.]/g, "") // Remove invalid chars
-    .replace(/\.+/g, ".") // Collapse consecutive dots
-    .replace(/^\.+|\.+$/g, "") // Trim leading/trailing dots
-    .toLowerCase()
-    .split(".")
-    .map((segment) => {
-      // Android requires each segment to start with a letter
-      // Prefix with 'x' if segment starts with a digit
-      return /^[a-zA-Z]/.test(segment) ? segment : "x" + segment;
-    })
-    .join(".") || "space.manus.app";
-// Extract timestamp from bundle ID and prefix with "manus" for deep link scheme
-// e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
-const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
-const schemeFromBundleId = `manus${timestamp}`;
+// Custom package name for Google Play Store
+const androidPackage = "com.elmujib.direct";
+const iosBundleId = "com.elmujib.direct";
+const scheme = "elmujibdirect";
 
 const env = {
   // App branding - update these values directly (do not use env vars)
@@ -33,9 +14,9 @@ const env = {
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
   logoUrl: "https://private-us-east-1.manuscdn.com/user_upload_by_module/session_file/310419663028929475/KVckgdcSjRDwmaWC.png?Expires=1803809940&Signature=mHmXr9DCQQtq9SILKotoHJl6Mnu2Gd5aylNLfveLHRBlthalJ9PDYuenOvysrmCq-iT59DhIvhYjRTlxYJEiddZ2glQ4DckvqQtPzr81~Qzj2tMLjfhZhlYCPash9BM87cmLAngN0TWQdtxNsVFr3MFWfx4ka3SAt4H5UMp80pBJFLvTpSNs0oXMaSRX4J~Eq0YJv~OS7Dc~KttZKIyjvqMLF595wZndPjpeKQRtPZ4hlrF4LLCwpMTBebZAiQi0guSEmyYimqZwObxo2FVckVCw2DBef30mBvXRJary3bUkyNtBnESwC88OzsnbR-Sl7mOQ2jzvrfs8M0IVvkqsQQ__&Key-Pair-Id=K2HSFNDJXOU9YS",
-  scheme: schemeFromBundleId,
-  iosBundleId: bundleId,
-  androidPackage: bundleId,
+  scheme,
+  iosBundleId,
+  androidPackage,
 };
 
 const config: ExpoConfig = {
@@ -64,7 +45,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: ["POST_NOTIFICATIONS", "RECORD_AUDIO"],
     intentFilters: [
       {
         action: "VIEW",
