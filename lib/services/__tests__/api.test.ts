@@ -34,6 +34,18 @@ describe('API Service', () => {
     expect(typeof api.apiPost).toBe('function');
     expect(typeof api.apiPostMultipart).toBe('function');
     expect(typeof api.getItemValue).toBe('function');
+    expect(typeof api.encryptWithRSA).toBe('function');
+    expect(typeof api.uploadFile).toBe('function');
+  });
+
+  it('getBaseUrl should return hardcoded base URL', async () => {
+    const { getBaseUrl } = await import('../api');
+    expect(getBaseUrl()).toBe('https://elmujib.com');
+  });
+
+  it('getApiUrl should return hardcoded API URL', async () => {
+    const { getApiUrl } = await import('../api');
+    expect(getApiUrl()).toBe('https://elmujib.com/api/');
   });
 
   it('getItemValue should extract nested values', async () => {
@@ -46,19 +58,15 @@ describe('API Service', () => {
     };
     expect(getItemValue(data, 'client_models.contacts')).toEqual({ a: 1, b: 2 });
     expect(getItemValue(data, 'client_models.unreadMessagesCount')).toBe(5);
-    expect(getItemValue(data, 'nonexistent.path')).toBeNull();
     expect(getItemValue(null, 'any.path')).toBeNull();
+    expect(getItemValue(data, 'nonexistent.path')).toBeNull();
   });
 
-  it('setBaseUrl should strip trailing slashes', async () => {
-    const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-    const { setBaseUrl, getBaseUrl } = await import('../api');
-    
-    await setBaseUrl('https://example.com///');
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      '@el_mujib_base_url',
-      'https://example.com'
-    );
+  it('encryptWithRSA should be a function that returns a string', async () => {
+    const { encryptWithRSA } = await import('../api');
+    expect(typeof encryptWithRSA).toBe('function');
+    const result = encryptWithRSA('test');
+    expect(typeof result).toBe('string');
   });
 });
 

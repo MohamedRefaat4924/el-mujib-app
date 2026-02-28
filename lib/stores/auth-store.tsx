@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthData } from '../types';
-import { saveAuthData, clearAuthData, getAuthData, setBaseUrl, getBaseUrl } from '../services/api';
+import { saveAuthData, clearAuthData, getAuthData, getBaseUrl } from '../services/api';
 
 interface AuthState {
   isLoading: boolean;
@@ -49,7 +49,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 
 interface AuthContextType {
   state: AuthState;
-  login: (authData: any, baseUrl?: string) => Promise<void>;
+  login: (authData: any) => Promise<void>;
   logout: () => Promise<void>;
   updateBaseUrl: (url: string) => Promise<void>;
   getInfo: (key: string) => any;
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const restoreSession = async () => {
     try {
       const authData = await getAuthData();
-      const baseUrl = await getBaseUrl();
+      const baseUrl = getBaseUrl();
       if (authData && authData.token) {
         dispatch({
           type: 'RESTORE_SESSION',
@@ -82,13 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = useCallback(async (responseData: any, baseUrl?: string) => {
+  const login = useCallback(async (responseData: any) => {
     try {
       // Extract auth data matching Flutter's createLoginSession exactly:
-      // token = responseData['data']['access_token']
-      // vendor_uid = responseData['data']['auth_info']['vendor_uid']
-      // uuid = responseData['data']['auth_info']['uuid']
-      // profile = responseData['data']['auth_info']['profile']
+      // Flutter: responseData['data']['access_token'] for token
+      // Flutter: responseData['data']['auth_info']['vendor_uid'] for vendor_uid
+      // Flutter: responseData['data']['auth_info']['uuid'] for uuid
+      // Flutter: responseData['data']['auth_info']['profile'] for profile data
       const data = responseData?.data || responseData;
       const authInfo = data?.auth_info || {};
       const profile = authInfo?.profile || {};
@@ -104,9 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile: profile,
       };
 
-      if (baseUrl) {
-        await setBaseUrl(baseUrl);
-      }
       await saveAuthData(authData);
       dispatch({ type: 'LOGIN_SUCCESS', payload: authData });
     } catch (e) {
@@ -125,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateBaseUrl = useCallback(async (url: string) => {
-    await setBaseUrl(url);
+    // Base URL is hardcoded - this is kept for interface compatibility
     dispatch({ type: 'SET_BASE_URL', payload: url });
   }, []);
 

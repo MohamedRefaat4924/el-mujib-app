@@ -42,7 +42,7 @@ export async function initPusher(options?: {
   const useTLS = options?.useTLS ?? SOKETI_CONFIG.useTLS;
   const appKey = options?.appKey || SOKETI_CONFIG.appKey;
 
-  const apiUrl = await getApiUrl();
+  const apiUrl = getApiUrl();
   // Flutter passes auth_token as query parameter: apiUrl("broadcasting/auth", queryParameters: {'auth_token': authToken})
   const authEndpoint = `${apiUrl}broadcasting/auth?auth_token=${encodeURIComponent(authToken)}`;
 

@@ -47,3 +47,5 @@
 - [x] Implement RSA encryption for secured login fields
 - [x] Fix Soketi appKey to use elmujib-key-12345 and auth_token as query param
 - [x] Remove fabricated endpoints and fix profile screen to use local storage
+- [x] Hardcode base URL to https://elmujib.com like Flutter (remove user input field)
+- [x] Fix JSON parse error on login (unexpected character : l)

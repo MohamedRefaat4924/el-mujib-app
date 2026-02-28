@@ -3,7 +3,10 @@ import { Platform } from 'react-native';
 import forge from 'node-forge';
 
 const AUTH_STORAGE_KEY = '@el_mujib_auth';
-const BASE_URL_KEY = '@el_mujib_base_url';
+
+// Hardcoded base URL matching Flutter app_config.dart exactly
+const BASE_URL = 'https://elmujib.com';
+const BASE_API_URL = `${BASE_URL}/api/`;
 
 // RSA Public Key from Flutter app_config.dart - used for secured login
 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -12,9 +15,9 @@ h7Lw4wxlBrbDONgYaebgscpjPRloeL0kj4aLI462lcQGVAxhyh8JijsCAwEAAQ==
 -----END PUBLIC KEY-----`;
 
 let cachedToken: string | null = null;
-let cachedBaseUrl: string | null = null;
 
 // RSA encryption matching Flutter's InputSecurity class
+// Uses PKCS1v1.5 padding (same as Flutter's PKCS1Encoding(RSAEngine()))
 export function encryptWithRSA(plaintext: string): string {
   try {
     const publicKey = forge.pki.publicKeyFromPem(PUBLIC_KEY);
@@ -27,6 +30,7 @@ export function encryptWithRSA(plaintext: string): string {
 }
 
 // Encrypt input data for secured requests (matching Flutter's data_transport.post secured logic)
+// Flutter encrypts BOTH keys and values with RSA
 function encryptInputData(
   inputData: Record<string, any>,
   unSecuredFields?: string[]
@@ -42,22 +46,18 @@ function encryptInputData(
   return encrypted;
 }
 
-export async function getBaseUrl(): Promise<string> {
-  if (cachedBaseUrl) return cachedBaseUrl;
-  const stored = await AsyncStorage.getItem(BASE_URL_KEY);
-  cachedBaseUrl = stored || '';
-  return cachedBaseUrl;
+// Base URL is hardcoded like Flutter - no need for dynamic setting
+export function getBaseUrl(): string {
+  return BASE_URL;
 }
 
-export async function setBaseUrl(url: string): Promise<void> {
-  const cleanUrl = url.replace(/\/+$/, '');
-  cachedBaseUrl = cleanUrl;
-  await AsyncStorage.setItem(BASE_URL_KEY, cleanUrl);
+export function getApiUrl(): string {
+  return BASE_API_URL;
 }
 
-export async function getApiUrl(): Promise<string> {
-  const base = await getBaseUrl();
-  return `${base}/api/`;
+// Keep setBaseUrl as no-op for backward compatibility
+export async function setBaseUrl(_url: string): Promise<void> {
+  // Base URL is hardcoded - this is a no-op
 }
 
 export async function getAuthToken(): Promise<string | null> {
@@ -110,12 +110,20 @@ export async function isLoggedIn(): Promise<boolean> {
   return !!token;
 }
 
-// HTTP headers matching Flutter's _setHeaders()
+// HTTP headers matching Flutter's _setHeaders() EXACTLY
+// Flutter sends these headers on every request:
+// 'Content-type': 'application/json; charset=UTF-8'
+// 'Accept': 'application/json'
+// 'X-Requested-With': 'XMLHttpRequest'
+// 'api-request-signature': 'mobile-app-request'
+// 'Authorization': 'Bearer $token'
 async function getHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
+    'Content-type': 'application/json; charset=UTF-8',
     'Accept': 'application/json',
-    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'api-request-signature': 'mobile-app-request',
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -127,6 +135,8 @@ async function getMultipartHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
     'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'api-request-signature': 'mobile-app-request',
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -136,12 +146,24 @@ async function getMultipartHeaders(): Promise<Record<string, string>> {
 
 export async function apiGet(
   endpoint: string,
-  options?: { onSuccess?: (data: any) => void; onError?: (error: any) => void }
+  options?: {
+    onSuccess?: (data: any) => void;
+    onError?: (error: any) => void;
+    queryParameters?: Record<string, string>;
+  }
 ): Promise<any> {
   try {
-    const apiUrl = await getApiUrl();
+    const apiUrl = getApiUrl();
     const headers = await getHeaders();
-    const response = await fetch(`${apiUrl}${endpoint}`, {
+
+    // Build query string like Flutter's apiUrl function
+    let url = `${apiUrl}${endpoint}`;
+    if (options?.queryParameters) {
+      const params = new URLSearchParams(options.queryParameters);
+      url += (url.includes('?') ? '&' : '?') + params.toString();
+    }
+
+    const response = await fetch(url, {
       method: 'GET',
       headers,
     });
@@ -179,7 +201,7 @@ export async function apiPost(
   }
 ): Promise<any> {
   try {
-    const apiUrl = await getApiUrl();
+    const apiUrl = getApiUrl();
     const headers = await getHeaders();
 
     // Apply RSA encryption for secured requests (matching Flutter's data_transport.post)
@@ -194,13 +216,60 @@ export async function apiPost(
       body: bodyData ? JSON.stringify(bodyData) : undefined,
     });
 
-    const data = await response.json();
+    // Try to parse as JSON
+    const text = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error(`API POST ${endpoint} - Response is not JSON:`, text.substring(0, 200));
+      throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+    }
+
+    // Match Flutter's _thenProcessing logic:
+    // Check if user is unauthorized
+    if (data?.data?.auth_info?.authorized === false) {
+      await clearAuthData();
+      throw new Error('Unauthorized');
+    }
+
+    // Check for token refresh
+    if (data?.data?.additional?.token_refreshed) {
+      cachedToken = data.data.additional.token_refreshed;
+      const authData = await getAuthData();
+      if (authData) {
+        authData.token = cachedToken;
+        await saveAuthData(authData);
+      }
+    }
 
     if (response.ok) {
-      if (options?.onSuccess) {
-        options.onSuccess(data);
+      // Flutter checks reaction === 1 or reaction === 21 for success
+      if (data.reaction === 1 || data.reaction === 21) {
+        if (options?.onSuccess) {
+          options.onSuccess(data);
+        }
+        return data;
+      } else {
+        // reaction is not 1 or 21 - this is a "failed" response in Flutter's logic
+        if (options?.onFailed) {
+          options.onFailed(data);
+        }
+        throw new Error(data?.data?.message || 'Request failed');
       }
-      return data;
+    } else if (response.status === 422) {
+      // Validation errors - Flutter extracts errors and shows them
+      const errors = data?.errors || {};
+      let errorString = data?.message || '';
+      Object.values(errors).forEach((errArr: any) => {
+        if (Array.isArray(errArr) && errArr[0]) {
+          errorString += '\n' + errArr[0];
+        }
+      });
+      if (options?.onFailed) {
+        options.onFailed(data);
+      }
+      throw new Error(errorString || 'Validation failed');
     } else {
       if (response.status === 401) {
         await clearAuthData();
@@ -208,11 +277,11 @@ export async function apiPost(
       if (options?.onFailed) {
         options.onFailed(data);
       }
-      throw new Error(data?.message || `HTTP ${response.status}`);
+      throw new Error(data?.data?.message || data?.message || `HTTP ${response.status}`);
     }
   } catch (error) {
     console.error(`API POST ${endpoint} error:`, error);
-    if (options?.onFailed) {
+    if (options?.onFailed && !(error as any)._handled) {
       options.onFailed(error);
     }
     throw error;
@@ -233,7 +302,7 @@ export async function uploadFile(
   }
 ): Promise<any> {
   try {
-    const apiUrl = await getApiUrl();
+    const apiUrl = getApiUrl();
     const headers = await getMultipartHeaders();
     const formData = new FormData();
 
@@ -264,7 +333,14 @@ export async function uploadFile(
       body: formData,
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error(`Upload to ${uploadUrl} - Response is not JSON:`, text.substring(0, 200));
+      throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+    }
 
     if (response.ok) {
       if (options?.onSuccess) {
@@ -293,7 +369,7 @@ export async function apiPostMultipart(
   }
 ): Promise<any> {
   try {
-    const apiUrl = await getApiUrl();
+    const apiUrl = getApiUrl();
     const headers = await getMultipartHeaders();
     const response = await fetch(`${apiUrl}${endpoint}`, {
       method: 'POST',
@@ -301,7 +377,14 @@ export async function apiPostMultipart(
       body: formData,
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error(`API POST multipart ${endpoint} - Response is not JSON:`, text.substring(0, 200));
+      throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+    }
 
     if (response.ok) {
       if (options?.onSuccess) {

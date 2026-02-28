@@ -14,14 +14,12 @@ import {
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/lib/stores/auth-store';
-import { apiPost, setBaseUrl } from '@/lib/services/api';
-import { ScreenContainer } from '@/components/screen-container';
+import { apiPost } from '@/lib/services/api';
 
 export default function LoginScreen() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [baseUrl, setBaseUrlState] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -32,23 +30,22 @@ export default function LoginScreen() {
       setError('Please enter email and password');
       return;
     }
-    if (!baseUrl.trim()) {
-      setError('Please enter server URL');
-      return;
-    }
 
     setError('');
     setIsLoading(true);
 
     try {
-      await setBaseUrl(baseUrl.trim());
+      // Flutter: data_transport.post(Account.login, inputData: formInputData, secured: true)
+      // Account.login = 'user/login-process'
+      // secured: true means RSA encrypt both keys and values
       const response = await apiPost('user/login-process', {
         email: email.trim(),
         password: password.trim(),
       }, { secured: true });
 
       if (response) {
-        await login(response, baseUrl.trim());
+        // Flutter: auth.createLoginSession(responseData, context)
+        await login(response);
         router.replace('/(tabs)');
       }
     } catch (e: any) {
@@ -59,23 +56,18 @@ export default function LoginScreen() {
   };
 
   const handleDemoLogin = async () => {
-    if (!baseUrl.trim()) {
-      setError('Please enter server URL');
-      return;
-    }
-
     setError('');
     setIsDemoLoading(true);
 
     try {
-      await setBaseUrl(baseUrl.trim());
+      // Flutter demo login: formInputData['email'] = 'testcompany', formInputData['password'] = 'demopass12'
       const response = await apiPost('user/login-process', {
         email: 'testcompany',
         password: 'demopass12',
       }, { secured: true });
 
       if (response) {
-        await login(response, baseUrl.trim());
+        await login(response);
         router.replace('/(tabs)');
       }
     } catch (e: any) {
@@ -118,22 +110,7 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* Server URL */}
-            <View style={styles.inputContainer}>
-              <MaterialIcons name="dns" size={20} color="#687076" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Server URL (e.g. https://example.com)"
-                placeholderTextColor="#9BA1A6"
-                value={baseUrl}
-                onChangeText={setBaseUrlState}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-            </View>
-
-            {/* Email */}
+            {/* Email / Username */}
             <View style={styles.inputContainer}>
               <MaterialIcons name="person" size={20} color="#687076" style={styles.inputIcon} />
               <TextInput
