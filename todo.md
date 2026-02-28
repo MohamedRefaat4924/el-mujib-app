@@ -1,0 +1,38 @@
+# Project TODO
+
+- [x] Configure theme colors (green brand) and app branding
+- [x] Generate app logo and configure icons
+- [x] Implement API client service with auth token management
+- [x] Implement login screen with email/password
+- [x] Implement auth state management and secure token storage
+- [x] Implement Soketi/Pusher real-time service
+- [x] Implement contacts list screen with paginated FlatList
+- [x] Implement contacts tab filtering (All, Mine, Unassigned, dynamic user tabs)
+- [x] Implement labels filter bar with colored chips
+- [x] Implement contact search functionality
+- [x] Implement unread message count badges
+- [x] Implement pull-to-refresh on contacts
+- [x] Implement infinite scroll pagination on contacts
+- [x] Implement chat screen with message list
+- [x] Implement all message type rendering (text, image, audio, video, document, sticker, contacts, location, interactive, template, reaction)
+- [x] Implement text message sending
+- [x] Implement image sending (camera and gallery)
+- [x] Implement multi-image sending (NEW)
+- [x] Implement audio recording and sending (ENHANCED)
+- [x] Implement document sending
+- [x] Implement template message sending
+- [x] Implement quick reply suggestions (NEW)
+- [x] Implement message status indicators (sent, delivered, read, failed)
+- [x] Implement HTML message formatting
+- [x] Implement real-time message updates via Soketi
+- [ ] Implement sound notification on new messages
+- [x] Implement user info screen with contact details
+- [x] Implement assign user functionality
+- [x] Implement assign labels functionality
+- [x] Implement contact notes editing
+- [x] Implement profile screen with edit functionality
+- [x] Implement settings screen with logout
+- [x] Implement localStorage for message history caching
+- [x] Implement smart context from cached messages
+- [x] Implement modern 3D UI styling throughout app
+- [x] Implement navigation structure (tabs, stack)

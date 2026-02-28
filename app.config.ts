@@ -32,7 +32,7 @@ const env = {
   appSlug: "el-mujib-app",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "",
+  logoUrl: "https://private-us-east-1.manuscdn.com/user_upload_by_module/session_file/310419663028929475/KVckgdcSjRDwmaWC.png?Expires=1803809940&Signature=mHmXr9DCQQtq9SILKotoHJl6Mnu2Gd5aylNLfveLHRBlthalJ9PDYuenOvysrmCq-iT59DhIvhYjRTlxYJEiddZ2glQ4DckvqQtPzr81~Qzj2tMLjfhZhlYCPash9BM87cmLAngN0TWQdtxNsVFr3MFWfx4ka3SAt4H5UMp80pBJFLvTpSNs0oXMaSRX4J~Eq0YJv~OS7Dc~KttZKIyjvqMLF595wZndPjpeKQRtPZ4hlrF4LLCwpMTBebZAiQi0guSEmyYimqZwObxo2FVckVCw2DBef30mBvXRJary3bUkyNtBnESwC88OzsnbR-Sl7mOQ2jzvrfs8M0IVvkqsQQ__&Key-Pair-Id=K2HSFNDJXOU9YS",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -56,7 +56,7 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
+      backgroundColor: "#089B21",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
