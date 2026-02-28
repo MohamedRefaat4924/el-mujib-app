@@ -17,11 +17,13 @@ h7Lw4wxlBrbDONgYaebgscpjPRloeL0kj4aLI462lcQGVAxhyh8JijsCAwEAAQ==
 let cachedToken: string | null = null;
 
 // RSA encryption matching Flutter's InputSecurity class
-// Uses PKCS1v1.5 padding (same as Flutter's PKCS1Encoding(RSAEngine()))
+// Flutter uses PKCS1Encoding(RSAEngine()) which is PKCS#1 v1.5 padding
+// In node-forge, publicKey.encrypt(data, 'RSAES-PKCS1-V1_5') is the equivalent
 export function encryptWithRSA(plaintext: string): string {
   try {
     const publicKey = forge.pki.publicKeyFromPem(PUBLIC_KEY);
-    const encrypted = (publicKey as any).encrypt(plaintext, 'PKCS1v1.5');
+    // Convert plaintext to bytes, encrypt with PKCS#1 v1.5, then base64 encode
+    const encrypted = publicKey.encrypt(forge.util.encodeUtf8(plaintext), 'RSAES-PKCS1-V1_5');
     return forge.util.encode64(encrypted);
   } catch (e) {
     console.error('RSA encryption failed:', e);

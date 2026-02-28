@@ -21,7 +21,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
@@ -52,28 +51,6 @@ export default function LoginScreen() {
       setError(e.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    setError('');
-    setIsDemoLoading(true);
-
-    try {
-      // Flutter demo login: formInputData['email'] = 'testcompany', formInputData['password'] = 'demopass12'
-      const response = await apiPost('user/login-process', {
-        email: 'testcompany',
-        password: 'demopass12',
-      }, { secured: true });
-
-      if (response) {
-        await login(response);
-        router.replace('/(tabs)');
-      }
-    } catch (e: any) {
-      setError(e.message || 'Demo login failed.');
-    } finally {
-      setIsDemoLoading(false);
     }
   };
 
@@ -135,6 +112,8 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
@@ -150,36 +129,15 @@ export default function LoginScreen() {
 
             {/* Login Button */}
             <TouchableOpacity
-              style={[styles.loginButton, (isLoading || isDemoLoading) && styles.buttonDisabled]}
+              style={[styles.loginButton, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
-              disabled={isLoading || isDemoLoading}
+              disabled={isLoading}
               activeOpacity={0.8}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.loginButtonText}>Login</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Demo Login */}
-            <TouchableOpacity
-              style={[styles.demoButton, (isLoading || isDemoLoading) && styles.buttonDisabled]}
-              onPress={handleDemoLogin}
-              disabled={isLoading || isDemoLoading}
-              activeOpacity={0.8}
-            >
-              {isDemoLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.demoButtonText}>Demo Company Login</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -296,38 +254,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#687076',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  demoButton: {
-    backgroundColor: '#1B1B23',
-    borderRadius: 12,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  demoButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
   },
 });

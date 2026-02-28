@@ -49,3 +49,5 @@
 - [x] Remove fabricated endpoints and fix profile screen to use local storage
 - [x] Hardcode base URL to https://elmujib.com like Flutter (remove user input field)
 - [x] Fix JSON parse error on login (unexpected character : l)
+- [x] Fix RSA encryption: use correct node-forge API (RSAES-PKCS1-V1_5)
+- [x] Remove Demo Company Login button from login screen
