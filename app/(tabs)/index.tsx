@@ -19,6 +19,12 @@ import { initPusher, subscribeToChannel, disconnectPusher } from '@/lib/services
 import { getApiUrl } from '@/lib/services/api';
 import { ScreenContainer } from '@/components/screen-container';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  requestNotificationPermissions,
+  handleNewMessageNotification,
+  setupNotificationResponseHandler,
+  cleanupNotifications,
+} from '@/lib/services/notification';
 
 const TABS_FIXED = ['All', 'Mine', 'Unassigned'];
 
@@ -51,6 +57,21 @@ export default function ContactsScreen() {
     fetchSingleContactRef.current = fetchSingleContact;
     updateContactNewMessageRef.current = updateContactNewMessage;
   });
+
+  // Request notification permissions on mount
+  useEffect(() => {
+    requestNotificationPermissions();
+
+    // Set up notification tap handler - navigate to chat when tapped
+    const cleanup = setupNotificationResponseHandler((contactUid) => {
+      router.push({ pathname: '/chat', params: { contactUid } });
+    });
+
+    return () => {
+      cleanup();
+      cleanupNotifications();
+    };
+  }, []);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -109,6 +130,15 @@ export default function ContactsScreen() {
                     eventData?.formatted_last_message_time || ''
                   );
                 }
+
+                // Play notification sound and show local notification
+                const contactName = eventData?.contactName || eventData?.full_name || 'New Message';
+                const messagePreview = eventData?.message || eventData?.formatted_message || 'You have a new message';
+                handleNewMessageNotification(
+                  contactName,
+                  messagePreview,
+                  contactUid
+                );
               }
             }
           },

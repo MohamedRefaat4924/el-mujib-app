@@ -85,3 +85,6 @@
 - [x] Bug: Voice upload still failing - tested API directly: all MIME types work. Root cause: recording produced raw AAC (.aac) which server may reject by content. Fixed: switched to M4A format (AAC in MP4 container, .m4a, audio/mp4) which server explicitly accepts
 - [x] Bug: ALL media uploads - images/docs/camera now work. Audio fix: switched to .aac extension with audio/aac MIME (matching Flutter exactly), removed all MIME remapping that was corrupting the upload
 - [x] Bug: Audio upload STILL 406 - Root cause: iOS MPEG4AAC produces M4A container (not raw AAC). Fix: platform-specific MIME - iOS sends audio/mp4 with .m4a, Android sends audio/aac with .aac
+- [x] Bug: Audio upload 406 on BOTH iOS and Android - Fixed: read audio file as base64 via expo-file-system, create Blob with explicit MIME type, bypassing RN native FormData MIME override
+- [x] Add sound notification on new messages (plays notification.mp3 via expo-audio on Pusher event)
+- [x] Add local push notification for new messages (expo-notifications with tap-to-navigate to chat)

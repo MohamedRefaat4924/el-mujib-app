@@ -16,6 +16,12 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
+// Mock expo-file-system (uses expo-modules-core which needs __DEV__)
+vi.mock('expo-file-system/legacy', () => ({
+  readAsStringAsync: vi.fn(),
+  EncodingType: { Base64: 'base64' },
+}));
+
 describe('API Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();

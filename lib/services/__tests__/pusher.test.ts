@@ -34,6 +34,12 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
+// Mock expo-file-system (imported transitively via api.ts)
+vi.mock('expo-file-system/legacy', () => ({
+  readAsStringAsync: vi.fn(),
+  EncodingType: { Base64: 'base64' },
+}));
+
 describe('Pusher Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
