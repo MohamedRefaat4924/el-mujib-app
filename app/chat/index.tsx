@@ -46,7 +46,6 @@ export default function ChatScreen() {
     sendTemplateMessage,
     resetChat,
     fetchTemplates,
-    markAllRead,
     loadCachedMessages,
     saveCachedMessages,
     loadQuickReplies,
@@ -77,7 +76,6 @@ export default function ChatScreen() {
       setContactUid(contactUid);
       loadCachedMessages(contactUid);
       fetchMessages(vendorUid, contactUid, { isRefresh: true });
-      markAllRead(contactUid);
       updateUnreadToZero(contactUid);
       fetchTemplates();
       loadQuickReplies();

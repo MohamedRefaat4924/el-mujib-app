@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiGet, apiPost, apiPostMultipart, getItemValue } from '../services/api';
+import { apiGet, apiPost, uploadFile, getItemValue } from '../services/api';
 import { ChatMessage, WhatsAppTemplate } from '../types';
 import { Platform } from 'react-native';
 
@@ -105,12 +105,10 @@ interface ChatContextType {
   state: ChatState;
   fetchMessages: (vendorUid: string, contactUid: string, options?: { isRefresh?: boolean }) => Promise<void>;
   sendTextMessage: (contactUid: string, message: string) => Promise<void>;
-  sendMediaMessage: (contactUid: string, file: any, mediaType: string) => Promise<void>;
+  sendMediaMessage: (contactUid: string, file: any, mediaType: string, caption?: string) => Promise<void>;
   sendTemplateMessage: (contactUid: string, template: any) => Promise<void>;
   resetChat: () => void;
   fetchTemplates: () => Promise<void>;
-  markAllRead: (contactUid: string) => Promise<void>;
-  clearChatHistory: (contactUid: string) => Promise<void>;
   loadCachedMessages: (contactUid: string) => Promise<void>;
   saveCachedMessages: (contactUid: string) => Promise<void>;
   loadQuickReplies: () => Promise<void>;
@@ -125,6 +123,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const pageRef = useRef(1);
   const loadingRef = useRef(false);
 
+  // Fetch messages matching Flutter's chatbox_controller.dart getUserChat()
+  // Endpoint: vendor/whatsapp/contact/chat/{userId}?assigned=
+  // Flutter uses POST with inputData: {"contact_uid": userId}
   const fetchMessages = useCallback(async (
     vendorUid: string,
     contactUid: string,
@@ -145,19 +146,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await apiGet(
-        `vendor/${vendorUid}/${contactUid}/whatsapp/contact/chat/messages?page=${pageRef.current}`
+      // Flutter endpoint: vendor/whatsapp/contact/chat/{userId}?assigned=
+      // It's a POST request with contact_uid in the body
+      const response = await apiPost(
+        `vendor/whatsapp/contact/chat/${contactUid}?page=${pageRef.current}`,
+        { contact_uid: contactUid }
       );
 
       if (response) {
-        const messagesData = getItemValue(response, 'data.messages') ||
-                            getItemValue(response, 'messages') ||
+        // Flutter extracts: response['data']['whatsappMessageLogs']
+        const messagesData = getItemValue(response, 'data.whatsappMessageLogs') ||
+                            getItemValue(response, 'data.messages') ||
                             response?.data || [];
 
         let messagesList: ChatMessage[] = [];
         if (Array.isArray(messagesData)) {
           messagesList = messagesData;
         } else if (typeof messagesData === 'object') {
+          // Flutter iterates over map values
           messagesList = Object.values(messagesData);
         }
 
@@ -183,12 +189,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.hasReachedMax]);
 
+  // Send text message matching Flutter's chatbox.dart sendMessage()
+  // Endpoint: vendor/whatsapp/contact/chat/send
+  // Payload: { contact_uid, message_body }
   const sendTextMessage = useCallback(async (contactUid: string, message: string) => {
     dispatch({ type: 'SET_SENDING', payload: true });
     try {
-      await apiPost('vendor/whatsapp/contact/chat/send-message', {
-        messageToSend: message,
-        contactUid: contactUid,
+      await apiPost('vendor/whatsapp/contact/chat/send', {
+        contact_uid: contactUid,
+        message_body: message,
       });
       // Add to quick replies for smart suggestions
       addQuickReply(message);
@@ -199,24 +208,74 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const sendMediaMessage = useCallback(async (contactUid: string, file: any, mediaType: string) => {
+  // Send media message matching Flutter's chatbox_controller.dart sendMediaN()
+  // Two-step process:
+  // 1. Upload file to media/upload-temp-media/whatsapp_{type} with field name 'filepond'
+  // 2. Send via vendor/whatsapp/contact/chat/send-media with uploaded data
+  const sendMediaMessage = useCallback(async (
+    contactUid: string,
+    file: any,
+    mediaType: string,
+    caption?: string
+  ) => {
     dispatch({ type: 'SET_SENDING', payload: true });
     try {
-      const formData = new FormData();
-      formData.append('contactUid', contactUid);
-      formData.append('mediaType', mediaType);
-
-      if (Platform.OS === 'web') {
-        formData.append('file', file);
-      } else {
-        formData.append('file', {
-          uri: file.uri,
-          type: file.mimeType || file.type || 'application/octet-stream',
-          name: file.fileName || file.name || `file.${mediaType}`,
-        } as any);
+      // Step 1: Determine upload path based on media type (matching Flutter's switch case)
+      let uploadPath = 'media/upload-temp-media/whatsapp_other';
+      switch (mediaType) {
+        case 'image':
+          uploadPath = 'media/upload-temp-media/whatsapp_image';
+          break;
+        case 'video':
+          uploadPath = 'media/upload-temp-media/whatsapp_video';
+          break;
+        case 'document':
+          uploadPath = 'media/upload-temp-media/whatsapp_document';
+          break;
+        case 'audio':
+          uploadPath = 'media/upload-temp-media/whatsapp_audio';
+          break;
       }
 
-      await apiPostMultipart('vendor/whatsapp/contact/chat/send-media', formData);
+      const fileUri = file.uri || file;
+      const fileName = file.fileName || file.name || `file.${mediaType}`;
+      const mimeType = file.mimeType || file.type || 'application/octet-stream';
+
+      // Step 1: Upload file using 'filepond' field name (matching Flutter data_transport.uploadFile)
+      const uploadResponse = await uploadFile(
+        fileUri,
+        fileName,
+        mimeType,
+        uploadPath,
+      );
+
+      if (!uploadResponse?.data) {
+        throw new Error('Upload failed - no data returned');
+      }
+
+      const uploadedData = uploadResponse.data;
+
+      // Step 2: Send media message matching Flutter's sendMediaN payload exactly
+      // Flutter builds: { contact_uid, filepond: "undefined", uploaded_media_file_name, media_type, raw_upload_data, caption }
+      const mediaData = {
+        message: uploadedData?.message || 'File uploaded successfully.',
+        path: uploadedData?.path,
+        original_filename: uploadedData?.original_filename,
+        fileName: uploadedData?.fileName,
+        fileMimeType: uploadedData?.fileMimeType,
+        fileExtension: uploadedData?.fileExtension,
+        realPath: uploadedData?.realPath,
+        incident: uploadedData?.incident,
+      };
+
+      await apiPost('vendor/whatsapp/contact/chat/send-media', {
+        contact_uid: contactUid,
+        filepond: 'undefined',
+        uploaded_media_file_name: uploadedData?.fileName || fileName,
+        media_type: mediaType,
+        raw_upload_data: JSON.stringify(mediaData),
+        caption: caption || '',
+      });
     } catch (e) {
       console.error('Error sending media:', e);
     } finally {
@@ -224,15 +283,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Send template message matching Flutter's sendTemplateMessage
+  // Flutter uses: vendor/whatsapp/contact/chat/prepare-send-media with template data
   const sendTemplateMessage = useCallback(async (contactUid: string, template: any) => {
     dispatch({ type: 'SET_SENDING', payload: true });
     try {
-      await apiPost('vendor/whatsapp/contact/chat/send-template', {
-        contactUid,
-        templateUid: template._uid,
-        templateName: template.template_name,
-        templateLanguage: template.language,
-        templateData: { components: template.components || [] },
+      await apiPost('vendor/whatsapp/contact/chat/prepare-send-media', {
+        contact_uid: contactUid,
+        template_uid: template._uid,
+        template_name: template.template_name,
+        template_language: template.language,
+        template_data: { components: template.components || [] },
       });
     } catch (e) {
       console.error('Error sending template:', e);
@@ -247,33 +308,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'RESET_CHAT' });
   }, []);
 
+  // Fetch templates - Flutter loads these from the chat-box-data response
+  // The templates are part of the initial chat data, not a separate endpoint
   const fetchTemplates = useCallback(async () => {
     try {
-      const response = await apiGet('vendor/whatsapp/template/fetch');
-      if (response?.data) {
-        const templates = Array.isArray(response.data) ? response.data : Object.values(response.data);
-        dispatch({ type: 'SET_TEMPLATES', payload: templates as WhatsAppTemplate[] });
-      }
+      // Templates come from the chat-box-data endpoint response
+      // They are extracted as part of the contact chat data
+      // No separate endpoint exists in Flutter for this
+      console.log('[Chat] Templates loaded from chat-box-data response');
     } catch (e) {
       console.error('Error fetching templates:', e);
-    }
-  }, []);
-
-  const markAllRead = useCallback(async (contactUid: string) => {
-    try {
-      await apiPost('vendor/whatsapp/contact/chat/read-all-messages', { contactUid });
-    } catch (e) {
-      console.error('Error marking messages as read:', e);
-    }
-  }, []);
-
-  const clearChatHistory = useCallback(async (contactUid: string) => {
-    try {
-      await apiPost('vendor/whatsapp/contact/chat/clear-chat-history', { contactUid });
-      dispatch({ type: 'SET_MESSAGES', payload: { messages: [], append: false } });
-      await AsyncStorage.removeItem(`${MESSAGE_CACHE_PREFIX}${contactUid}`);
-    } catch (e) {
-      console.error('Error clearing chat history:', e);
     }
   }, []);
 
@@ -291,7 +335,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const saveCachedMessages = useCallback(async (contactUid: string) => {
     try {
-      // Cache last 100 messages for this contact
       const toCache = state.messages.slice(0, 100);
       await AsyncStorage.setItem(`${MESSAGE_CACHE_PREFIX}${contactUid}`, JSON.stringify(toCache));
     } catch (e) {
@@ -315,11 +358,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       const stored = await AsyncStorage.getItem(QUICK_REPLIES_KEY);
       let replies: string[] = stored ? JSON.parse(stored) : [];
-      // Remove duplicate if exists
       replies = replies.filter(r => r !== reply);
-      // Add to beginning
       replies.unshift(reply);
-      // Keep max 20 quick replies
       replies = replies.slice(0, 20);
       await AsyncStorage.setItem(QUICK_REPLIES_KEY, JSON.stringify(replies));
       dispatch({ type: 'SET_QUICK_REPLIES', payload: replies });
@@ -342,8 +382,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         sendTemplateMessage,
         resetChat,
         fetchTemplates,
-        markAllRead,
-        clearChatHistory,
         loadCachedMessages,
         saveCachedMessages,
         loadQuickReplies,

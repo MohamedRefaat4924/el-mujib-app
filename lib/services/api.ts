@@ -1,11 +1,46 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import forge from 'node-forge';
 
 const AUTH_STORAGE_KEY = '@el_mujib_auth';
 const BASE_URL_KEY = '@el_mujib_base_url';
 
+// RSA Public Key from Flutter app_config.dart - used for secured login
+const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAPJwwNa//eaQYxkNsAODohg38azVtalE
+h7Lw4wxlBrbDONgYaebgscpjPRloeL0kj4aLI462lcQGVAxhyh8JijsCAwEAAQ==
+-----END PUBLIC KEY-----`;
+
 let cachedToken: string | null = null;
 let cachedBaseUrl: string | null = null;
+
+// RSA encryption matching Flutter's InputSecurity class
+export function encryptWithRSA(plaintext: string): string {
+  try {
+    const publicKey = forge.pki.publicKeyFromPem(PUBLIC_KEY);
+    const encrypted = (publicKey as any).encrypt(plaintext, 'PKCS1v1.5');
+    return forge.util.encode64(encrypted);
+  } catch (e) {
+    console.error('RSA encryption failed:', e);
+    return '';
+  }
+}
+
+// Encrypt input data for secured requests (matching Flutter's data_transport.post secured logic)
+function encryptInputData(
+  inputData: Record<string, any>,
+  unSecuredFields?: string[]
+): Record<string, any> {
+  const encrypted: Record<string, any> = {};
+  Object.entries(inputData).forEach(([key, value]) => {
+    if (unSecuredFields && unSecuredFields.includes(key)) {
+      encrypted[key] = value;
+    } else {
+      encrypted[encryptWithRSA(key)] = encryptWithRSA(String(value));
+    }
+  });
+  return encrypted;
+}
 
 export async function getBaseUrl(): Promise<string> {
   if (cachedBaseUrl) return cachedBaseUrl;
@@ -15,7 +50,6 @@ export async function getBaseUrl(): Promise<string> {
 }
 
 export async function setBaseUrl(url: string): Promise<void> {
-  // Ensure URL ends without trailing slash
   const cleanUrl = url.replace(/\/+$/, '');
   cachedBaseUrl = cleanUrl;
   await AsyncStorage.setItem(BASE_URL_KEY, cleanUrl);
@@ -53,11 +87,6 @@ export async function getAuthData(): Promise<any | null> {
   return null;
 }
 
-export function getAuthInfo(key: string): any {
-  // Synchronous version - uses cached data
-  return null; // Will be populated by the store
-}
-
 export async function saveAuthData(data: any): Promise<void> {
   try {
     await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
@@ -81,7 +110,7 @@ export async function isLoggedIn(): Promise<boolean> {
   return !!token;
 }
 
-// HTTP methods
+// HTTP headers matching Flutter's _setHeaders()
 async function getHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
@@ -146,15 +175,23 @@ export async function apiPost(
     onSuccess?: (data: any) => void;
     onFailed?: (data: any) => void;
     secured?: boolean;
+    unSecuredFields?: string[];
   }
 ): Promise<any> {
   try {
     const apiUrl = await getApiUrl();
     const headers = await getHeaders();
+
+    // Apply RSA encryption for secured requests (matching Flutter's data_transport.post)
+    let bodyData = inputData;
+    if (options?.secured && inputData) {
+      bodyData = encryptInputData(inputData, options.unSecuredFields);
+    }
+
     const response = await fetch(`${apiUrl}${endpoint}`, {
       method: 'POST',
       headers,
-      body: inputData ? JSON.stringify(inputData) : undefined,
+      body: bodyData ? JSON.stringify(bodyData) : undefined,
     });
 
     const data = await response.json();
@@ -177,6 +214,70 @@ export async function apiPost(
     console.error(`API POST ${endpoint} error:`, error);
     if (options?.onFailed) {
       options.onFailed(error);
+    }
+    throw error;
+  }
+}
+
+// Upload file matching Flutter's data_transport.uploadFile
+// Uses 'filepond' as the file field name, matching Flutter exactly
+export async function uploadFile(
+  fileUri: string,
+  fileName: string,
+  mimeType: string,
+  uploadUrl: string,
+  options?: {
+    inputData?: Record<string, string>;
+    onSuccess?: (data: any) => void;
+    onError?: (error: any) => void;
+  }
+): Promise<any> {
+  try {
+    const apiUrl = await getApiUrl();
+    const headers = await getMultipartHeaders();
+    const formData = new FormData();
+
+    // Add additional input data fields
+    if (options?.inputData) {
+      Object.entries(options.inputData).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+    }
+
+    // Add file with field name 'filepond' matching Flutter exactly
+    if (Platform.OS === 'web') {
+      // For web, fileUri is a blob URL or File object
+      const response = await fetch(fileUri);
+      const blob = await response.blob();
+      formData.append('filepond', blob, fileName);
+    } else {
+      formData.append('filepond', {
+        uri: fileUri,
+        type: mimeType,
+        name: fileName,
+      } as any);
+    }
+
+    const response = await fetch(`${apiUrl}${uploadUrl}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      if (options?.onSuccess) {
+        options.onSuccess(data);
+      }
+      return data;
+    } else {
+      throw new Error(data?.message || `Upload failed: HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.error(`Upload to ${uploadUrl} error:`, error);
+    if (options?.onError) {
+      options.onError(error);
     }
     throw error;
   }
@@ -223,12 +324,13 @@ export async function apiPostMultipart(
 }
 
 // Helper to extract nested values like 'client_models.contacts'
-export function getItemValue(data: any, path: string): any {
+// Matches Flutter's getItemValue utility
+export function getItemValue(data: any, path: string, fallbackValue: any = null): any {
   const keys = path.split('.');
   let current = data;
   for (const key of keys) {
-    if (current == null) return null;
+    if (current == null) return fallbackValue;
     current = current[key];
   }
-  return current;
+  return current ?? fallbackValue;
 }

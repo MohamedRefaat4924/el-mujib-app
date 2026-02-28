@@ -36,3 +36,14 @@
 - [x] Implement smart context from cached messages
 - [x] Implement modern 3D UI styling throughout app
 - [x] Implement navigation structure (tabs, stack)
+
+- [x] Fix login endpoint: user/login → user/login-process
+- [x] Fix send text message endpoint and payload to match Flutter exactly
+- [x] Fix messages fetch endpoint to match Flutter: vendor/whatsapp/contact/chat/{userId}?assigned=
+- [x] Fix profile update endpoint: user/profile/update → user/profile-update
+- [x] Fix user info endpoint: use vendor/contacts/{userId}/get-update-data and vendor/whatsapp/contact/chat-box-data/{userId}
+- [x] Fix update-notes, assign-user, assign-labels endpoints and payloads
+- [x] Fix send media flow: two-step upload (filepond) then send with correct payload
+- [x] Implement RSA encryption for secured login fields
+- [x] Fix Soketi appKey to use elmujib-key-12345 and auth_token as query param
+- [x] Remove fabricated endpoints and fix profile screen to use local storage

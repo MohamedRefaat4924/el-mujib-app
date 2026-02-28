@@ -15,11 +15,20 @@ interface SubscriptionCallbacks {
 
 const channelSubscriptions: Map<string, SubscriptionCallbacks> = new Map();
 
-export async function initPusher(options: {
-  authToken: string;
-  host: string;
-  port: number;
-  useTLS: boolean;
+// Soketi configuration from Flutter app_config.dart configItems
+const SOKETI_CONFIG = {
+  appKey: 'elmujib-key-12345',   // configItems.services.pusher.apiKey
+  cluster: 'eu',                  // configItems.services.pusher.cluster
+  host: 'aa.evyx.lol',           // configItems.services.soketi.host
+  port: 443,                      // configItems.services.soketi.port
+  useTLS: true,                   // configItems.services.soketi.useTLS
+};
+
+export async function initPusher(options?: {
+  authToken?: string;
+  host?: string;
+  port?: number;
+  useTLS?: boolean;
   appKey?: string;
 }): Promise<void> {
   if (isInitialized && pusherInstance) {
@@ -27,23 +36,28 @@ export async function initPusher(options: {
     return;
   }
 
+  const authToken = options?.authToken || await getAuthToken() || '';
+  const host = options?.host || SOKETI_CONFIG.host;
+  const port = options?.port || SOKETI_CONFIG.port;
+  const useTLS = options?.useTLS ?? SOKETI_CONFIG.useTLS;
+  const appKey = options?.appKey || SOKETI_CONFIG.appKey;
+
   const apiUrl = await getApiUrl();
-  const authEndpoint = `${apiUrl}broadcasting/auth`;
+  // Flutter passes auth_token as query parameter: apiUrl("broadcasting/auth", queryParameters: {'auth_token': authToken})
+  const authEndpoint = `${apiUrl}broadcasting/auth?auth_token=${encodeURIComponent(authToken)}`;
 
   try {
-    // Pusher/Soketi initialization
-    pusherInstance = new Pusher(options.appKey || 'app-key', {
-      wsHost: options.host,
-      wsPort: options.useTLS ? options.port : 6001,
-      wssPort: options.port,
-      forceTLS: options.useTLS,
+    pusherInstance = new Pusher(appKey, {
+      wsHost: host,
+      wsPort: useTLS ? port : 6001,
+      wssPort: port,
+      forceTLS: useTLS,
       disableStats: true,
       enabledTransports: ['ws', 'wss'],
-      cluster: 'mt1',
+      cluster: SOKETI_CONFIG.cluster,
       authEndpoint: authEndpoint,
       auth: {
         headers: {
-          'Authorization': `Bearer ${options.authToken}`,
           'Accept': 'application/json',
         },
       },
@@ -64,7 +78,7 @@ export async function initPusher(options: {
     });
 
     isInitialized = true;
-    console.log('[Pusher] Initialized with host:', options.host);
+    console.log('[Pusher] Initialized with host:', host, 'appKey:', appKey);
   } catch (error) {
     console.error('[Pusher] Init failed:', error);
     throw error;
@@ -86,7 +100,7 @@ export function subscribeToChannel(
     channel.bind_global((eventName: string, data: any) => {
       // Skip internal pusher events
       if (eventName.startsWith('pusher:')) return;
-      
+
       console.log(`[Pusher] Event on ${channelName}:`, eventName);
       callbacks.onEvent(eventName, data);
     });
@@ -110,7 +124,7 @@ export function subscribeToChannel(
 
 export function unsubscribeFromChannel(channelName: string): void {
   if (!pusherInstance) return;
-  
+
   try {
     pusherInstance.unsubscribe(channelName);
     channelSubscriptions.delete(channelName);
@@ -141,3 +155,5 @@ export function reconnectPusher(): void {
 export function getPusherState(): { isInitialized: boolean; isConnected: boolean } {
   return { isInitialized, isConnected };
 }
+
+export { SOKETI_CONFIG };

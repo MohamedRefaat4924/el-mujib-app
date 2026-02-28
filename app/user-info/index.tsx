@@ -57,13 +57,14 @@ export default function UserInfoScreen() {
   const loadUserInfo = async () => {
     setIsLoading(true);
     try {
+      // Flutter endpoint: vendor/contacts/{userId}/get-update-data
       const response = await apiGet(
-        `vendor/${vendorUid}/${contactUid}/whatsapp/contact/user-info`
+        `vendor/contacts/${contactUid}/get-update-data`
       );
       if (response?.data) {
         const info = response.data.contactData || response.data;
         setUserInfo(info);
-        setNotes(info.description || info.notes || '');
+        setNotes(info.description || info.contact_notes || info.notes || '');
         setSelectedUserId(info.assigned_users__id ? String(info.assigned_users__id) : '');
 
         const labelIds = new Set<string>();
@@ -82,8 +83,11 @@ export default function UserInfoScreen() {
   const handleSaveNotes = async () => {
     setIsSavingNotes(true);
     try {
-      await apiPost(`vendor/${vendorUid}/${contactUid}/whatsapp/contact/update-notes`, {
-        description: notes,
+      // Flutter endpoint: vendor/contacts/{userId}/contact-update-notes
+      // Flutter payload: { contactIdOrUid: contactUid, contact_notes: notes }
+      await apiPost(`vendor/contacts/${contactUid}/contact-update-notes`, {
+        contactIdOrUid: contactUid,
+        contact_notes: notes,
       });
       Alert.alert('Success', 'Notes saved successfully');
     } catch (e) {
@@ -97,8 +101,11 @@ export default function UserInfoScreen() {
     setSelectedUserId(userId);
     setIsSavingAssign(true);
     try {
-      await apiPost(`vendor/${vendorUid}/${contactUid}/whatsapp/contact/assign-user`, {
-        assigned_users__id: userId || null,
+      // Flutter endpoint: vendor/contacts/{userId}/contact-assign-user
+      // Flutter payload: { contactIdOrUid: contactUid, assigned_users_uid: userId }
+      await apiPost(`vendor/contacts/${contactUid}/contact-assign-user`, {
+        contactIdOrUid: contactUid,
+        assigned_users_uid: userId || '',
       });
     } catch (e) {
       Alert.alert('Error', 'Failed to assign user');
@@ -117,8 +124,11 @@ export default function UserInfoScreen() {
     setSelectedLabels(newLabels);
     setIsSavingLabels(true);
     try {
-      await apiPost(`vendor/${vendorUid}/${contactUid}/whatsapp/contact/assign-labels`, {
-        labels: Array.from(newLabels),
+      // Flutter endpoint: vendor/contacts/{userId}/contact-assign-labels
+      // Flutter payload: { contactUid: contactUid, contact_labels: labelsArray }
+      await apiPost(`vendor/contacts/${contactUid}/contact-assign-labels`, {
+        contactUid: contactUid,
+        contact_labels: Array.from(newLabels),
       });
     } catch (e) {
       Alert.alert('Error', 'Failed to update labels');

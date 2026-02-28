@@ -84,17 +84,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (responseData: any, baseUrl?: string) => {
     try {
-      // Extract auth data from response - matching Flutter's createLoginSession
+      // Extract auth data matching Flutter's createLoginSession exactly:
+      // token = responseData['data']['access_token']
+      // vendor_uid = responseData['data']['auth_info']['vendor_uid']
+      // uuid = responseData['data']['auth_info']['uuid']
+      // profile = responseData['data']['auth_info']['profile']
+      const data = responseData?.data || responseData;
+      const authInfo = data?.auth_info || {};
+      const profile = authInfo?.profile || {};
       const authData: AuthData = {
-        token: responseData?.data?.access_token || responseData?.access_token || '',
-        vendor_uid: responseData?.data?.vendor_uid || responseData?.vendor_uid || '',
-        uuid: responseData?.data?.uuid || responseData?.uuid || '',
-        username: responseData?.data?.username || responseData?.username || '',
-        first_name: responseData?.data?.first_name || responseData?.first_name || '',
-        last_name: responseData?.data?.last_name || responseData?.last_name || '',
-        email: responseData?.data?.email || responseData?.email || '',
-        mobile_number: responseData?.data?.mobile_number || responseData?.mobile_number || '',
-        profile: responseData?.data?.profile || responseData?.profile || null,
+        token: data?.access_token || '',
+        vendor_uid: String(authInfo?.vendor_uid || ''),
+        uuid: String(authInfo?.uuid || ''),
+        username: profile?.username || '',
+        first_name: profile?.first_name || '',
+        last_name: profile?.last_name || '',
+        email: profile?.email || '',
+        mobile_number: profile?.mobile_number || '',
+        profile: profile,
       };
 
       if (baseUrl) {

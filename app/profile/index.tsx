@@ -32,27 +32,11 @@ export default function ProfileScreen() {
     loadProfile();
   }, []);
 
+  // Flutter loads profile from local storage (storeUserInfo), not from a GET endpoint
+  // So we just load from authState directly
   const loadProfile = async () => {
     setIsLoading(true);
     try {
-      const response = await apiGet('user/profile');
-      if (response?.data) {
-        const profile = response.data;
-        setFirstName(profile.first_name || '');
-        setLastName(profile.last_name || '');
-        setMobileNumber(profile.mobile_number || '');
-        setEmail(profile.email || '');
-        setUsername(profile.username || '');
-      } else {
-        // Fallback to auth data
-        setFirstName(authState.authData?.first_name || '');
-        setLastName(authState.authData?.last_name || '');
-        setMobileNumber(authState.authData?.mobile_number || '');
-        setEmail(authState.authData?.email || '');
-        setUsername(authState.authData?.username || '');
-      }
-    } catch (e) {
-      // Fallback to auth data
       setFirstName(authState.authData?.first_name || '');
       setLastName(authState.authData?.last_name || '');
       setMobileNumber(authState.authData?.mobile_number || '');
@@ -66,7 +50,8 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await apiPost('user/profile/update', {
+      // Flutter endpoint: user/profile-update
+      await apiPost('user/profile-update', {
         first_name: firstName,
         last_name: lastName,
         mobile_number: mobileNumber,

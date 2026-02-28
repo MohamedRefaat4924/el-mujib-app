@@ -42,7 +42,7 @@ export default function LoginScreen() {
 
     try {
       await setBaseUrl(baseUrl.trim());
-      const response = await apiPost('user/login', {
+      const response = await apiPost('user/login-process', {
         email: email.trim(),
         password: password.trim(),
       }, { secured: true });
@@ -69,7 +69,7 @@ export default function LoginScreen() {
 
     try {
       await setBaseUrl(baseUrl.trim());
-      const response = await apiPost('user/login', {
+      const response = await apiPost('user/login-process', {
         email: 'testcompany',
         password: 'demopass12',
       }, { secured: true });
