@@ -66,3 +66,4 @@
 - [x] Bug: Duplicate contacts in home page - fixed contactExists to check both key and _uid, fixed ADD_NEW_CONTACT and UPDATE_CONTACT_NEW_MESSAGE to prevent duplicates
 - [x] Bug: Audio upload 406 - switched to HIGH_QUALITY preset (.m4a/audio/mp4), fixed MIME sanitization mapping
 - [x] Bug: Real-time messages not working - reverted Pusher to original simple version, added 5s polling in chat screen, fixed stale closure refs in home page
+- [ ] Bug: Audio upload still 406 even with audio/mp4 MIME - server likely checking file content not just declared MIME type

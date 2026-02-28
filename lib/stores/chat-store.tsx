@@ -335,6 +335,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const fileName = file.fileName || file.name || `file.${normalizedLabel}`;
       const mimeType = file.mimeType || file.type || 'application/octet-stream';
 
+      console.log('[sendMediaMessage] Extracted from file object:', {
+        fileUri: fileUri?.substring(0, 80),
+        fileName,
+        mimeType,
+        uploadPath,
+        normalizedLabel,
+        fileKeys: Object.keys(file),
+      });
+
       // Step 2: Upload file using 'filepond' field name (matching Flutter data_transport.uploadFile)
       const uploadResponse = await uploadFile(
         fileUri,

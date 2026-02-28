@@ -260,12 +260,12 @@ export default function ChatScreen() {
             {
               text: 'Send Now',
               onPress: async () => {
-                // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-                // HIGH_QUALITY preset produces .m4a (MPEG4 AAC) -> audio/mp4
+                // Force audio/aac MIME type and .aac extension to match Flutter's upload exactly
+                // The server's whatsapp_audio endpoint may require audio/aac specifically
                 await sendMediaMessage(contactUid, {
                   uri,
-                  mimeType: 'audio/mp4',
-                  fileName: 'voice_message.m4a',
+                  mimeType: 'audio/aac',
+                  fileName: 'voice_message.aac',
                 }, 'audio');
                 setTimeout(() => {
                   fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -335,8 +335,8 @@ export default function ChatScreen() {
     try {
       await sendMediaMessage(contactUid, {
         uri: voice.uri,
-        mimeType: 'audio/mp4',
-        fileName: `${voice.name}.m4a`,
+        mimeType: 'audio/aac',
+        fileName: `${voice.name}.aac`,
       }, 'audio');
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
