@@ -42,7 +42,6 @@ describe('AAC Recording Preset', () => {
   });
 
   it('should use MPEG4AAC output format on iOS', () => {
-    // IOSOutputFormat.MPEG4AAC = "aac " (with trailing space)
     expect(AAC_RECORDING_PRESET.ios.outputFormat).toBe('aac ');
   });
 
@@ -52,41 +51,48 @@ describe('AAC Recording Preset', () => {
   });
 });
 
-// Test the MIME type handling matching Flutter's data_transport.dart exactly
-describe('Audio MIME Type Handling (Flutter-aligned)', () => {
-  // Flutter sends audio/aac as-is and the server accepts it.
-  // We only map truly unknown MIME types to sensible defaults.
-  const flutterMimeMap: Record<string, string> = {
+// Test the MIME type sanitization - server ONLY accepts: audio/mp4, audio/mpeg, audio/amr, audio/ogg
+describe('Audio MIME Type Sanitization (Server-validated)', () => {
+  const acceptedAudioTypes = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+
+  const audioMimeMap: Record<string, string> = {
+    'audio/aac': 'audio/ogg',
     'audio/m4a': 'audio/mp4',
     'audio/x-m4a': 'audio/mp4',
     'audio/mp4a-latm': 'audio/mp4',
-    'audio/x-wav': 'audio/wav',
+    'audio/wav': 'audio/ogg',
+    'audio/x-wav': 'audio/ogg',
+    'audio/webm': 'audio/ogg',
     'audio/3gpp': 'audio/amr',
     'audio/3gpp2': 'audio/amr',
-    'audio/caf': 'audio/aac',
-    'audio/x-caf': 'audio/aac',
-    'audio/webm': 'audio/ogg',
-    'application/octet-stream': 'audio/aac',
+    'audio/caf': 'audio/ogg',
+    'audio/x-caf': 'audio/ogg',
+    'application/octet-stream': 'audio/ogg',
   };
 
   function sanitizeMimeType(mimeType: string): string {
-    return flutterMimeMap[mimeType] || mimeType;
+    if (acceptedAudioTypes.includes(mimeType)) return mimeType;
+    return audioMimeMap[mimeType] || 'audio/ogg';
   }
 
-  it('should NOT remap audio/aac - send as-is like Flutter does', () => {
-    expect(sanitizeMimeType('audio/aac')).toBe('audio/aac');
+  it('should map audio/aac to audio/ogg (server rejects audio/aac)', () => {
+    expect(sanitizeMimeType('audio/aac')).toBe('audio/ogg');
   });
 
-  it('should pass through audio/mp4 unchanged', () => {
+  it('should pass through accepted audio/mp4', () => {
     expect(sanitizeMimeType('audio/mp4')).toBe('audio/mp4');
   });
 
-  it('should pass through audio/mpeg unchanged', () => {
+  it('should pass through accepted audio/mpeg', () => {
     expect(sanitizeMimeType('audio/mpeg')).toBe('audio/mpeg');
   });
 
-  it('should pass through audio/ogg unchanged', () => {
+  it('should pass through accepted audio/ogg', () => {
     expect(sanitizeMimeType('audio/ogg')).toBe('audio/ogg');
+  });
+
+  it('should pass through accepted audio/amr', () => {
+    expect(sanitizeMimeType('audio/amr')).toBe('audio/amr');
   });
 
   it('should map audio/m4a to audio/mp4', () => {
@@ -97,29 +103,61 @@ describe('Audio MIME Type Handling (Flutter-aligned)', () => {
     expect(sanitizeMimeType('audio/webm')).toBe('audio/ogg');
   });
 
-  it('should map application/octet-stream to audio/aac', () => {
-    expect(sanitizeMimeType('application/octet-stream')).toBe('audio/aac');
+  it('should map application/octet-stream to audio/ogg', () => {
+    expect(sanitizeMimeType('application/octet-stream')).toBe('audio/ogg');
   });
 
-  it('should map audio/caf to audio/aac', () => {
-    expect(sanitizeMimeType('audio/caf')).toBe('audio/aac');
+  it('should default unknown types to audio/ogg', () => {
+    expect(sanitizeMimeType('audio/unknown')).toBe('audio/ogg');
+    expect(sanitizeMimeType('video/mp4')).toBe('audio/ogg');
   });
 
-  it('should pass through unknown types unchanged (no forced default)', () => {
-    expect(sanitizeMimeType('audio/unknown')).toBe('audio/unknown');
+  it('should always return an accepted type', () => {
+    const testTypes = ['audio/aac', 'audio/m4a', 'audio/wav', 'audio/caf', 'audio/webm', 'application/octet-stream', 'audio/unknown'];
+    for (const type of testTypes) {
+      const result = sanitizeMimeType(type);
+      expect(acceptedAudioTypes).toContain(result);
+    }
   });
 });
 
-// Test that voice recording sends correct MIME type and extension
+// Test the send-media payload MIME type forcing
+describe('Send-Media Payload MIME Forcing', () => {
+  const acceptedAudio = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+
+  function forceMimeForSendMedia(fileMimeType: string, mediaType: string): string {
+    if (mediaType === 'audio' && !acceptedAudio.includes(fileMimeType)) {
+      return 'audio/ogg';
+    }
+    return fileMimeType;
+  }
+
+  it('should force audio/aac to audio/ogg in raw_upload_data', () => {
+    expect(forceMimeForSendMedia('audio/aac', 'audio')).toBe('audio/ogg');
+  });
+
+  it('should keep audio/ogg unchanged', () => {
+    expect(forceMimeForSendMedia('audio/ogg', 'audio')).toBe('audio/ogg');
+  });
+
+  it('should keep audio/mp4 unchanged', () => {
+    expect(forceMimeForSendMedia('audio/mp4', 'audio')).toBe('audio/mp4');
+  });
+
+  it('should not affect non-audio media types', () => {
+    expect(forceMimeForSendMedia('image/jpeg', 'image')).toBe('image/jpeg');
+    expect(forceMimeForSendMedia('application/pdf', 'document')).toBe('application/pdf');
+  });
+});
+
+// Test that voice recording sends correct parameters
 describe('Voice Recording Upload Parameters', () => {
-  it('should send audio/aac MIME type for voice recordings', () => {
-    // When recording with AAC_RECORDING_PRESET (.aac extension, aac_adts format)
-    // The upload should use audio/aac MIME type - matching Flutter exactly
-    const mimeType = 'audio/aac';
-    const fileName = `voice_${Date.now()}.aac`;
+  it('should send audio/ogg MIME type for voice recordings (not audio/aac)', () => {
+    const mimeType = 'audio/ogg';
+    const fileName = `voice_${Date.now()}.ogg`;
     
-    expect(mimeType).toBe('audio/aac');
-    expect(fileName).toMatch(/^voice_\d+\.aac$/);
+    expect(mimeType).toBe('audio/ogg');
+    expect(fileName).toMatch(/^voice_\d+\.ogg$/);
   });
 
   it('should use whatsapp_audio upload path for audio messages', () => {

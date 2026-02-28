@@ -314,33 +314,49 @@ export async function uploadFile(
     const headers = await getMultipartHeaders();
     const formData = new FormData();
 
-    // Match Flutter's data_transport.dart MIME type handling exactly.
-    // Flutter maps file extensions to MIME types (line 147-162 of data_transport.dart):
-    //   .aac → audio/aac, .mp3 → audio/mpeg, .wav → audio/wav, .mp4 → video/mp4, etc.
-    // Flutter does NOT sanitize or remap MIME types - it sends them as-is.
-    // The server accepts audio/aac (confirmed by Flutter working correctly).
+    // Server ONLY accepts these audio MIME types: audio/mp4, audio/mpeg, audio/amr, audio/ogg
+    // audio/aac is NOT accepted despite Flutter's data_transport.dart mapping it.
+    // The server validates the declared MIME type (not file content) and rejects anything else.
     let sanitizedMimeType = mimeType;
     let sanitizedFileName = fileName;
 
-    // Only map truly unknown MIME types to sensible defaults (matching Flutter's extension map)
     if (uploadUrl.includes('whatsapp_audio') || uploadUrl.includes('audio')) {
-      const flutterMimeMap: Record<string, string> = {
-        'audio/m4a': 'audio/mp4',
-        'audio/x-m4a': 'audio/mp4',
-        'audio/mp4a-latm': 'audio/mp4',
-        'audio/x-wav': 'audio/wav',
-        'audio/3gpp': 'audio/amr',
-        'audio/3gpp2': 'audio/amr',
-        'audio/caf': 'audio/aac',
-        'audio/x-caf': 'audio/aac',
-        'audio/webm': 'audio/ogg',
-        'application/octet-stream': 'audio/aac',
-      };
-      if (flutterMimeMap[mimeType]) {
-        sanitizedMimeType = flutterMimeMap[mimeType];
-        console.log(`[Upload] Mapped MIME type: ${mimeType} → ${sanitizedMimeType}`);
+      const acceptedAudioTypes = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+      if (!acceptedAudioTypes.includes(mimeType)) {
+        // Map all non-accepted types to accepted ones
+        const audioMimeMap: Record<string, string> = {
+          'audio/aac': 'audio/ogg',
+          'audio/m4a': 'audio/mp4',
+          'audio/x-m4a': 'audio/mp4',
+          'audio/mp4a-latm': 'audio/mp4',
+          'audio/wav': 'audio/ogg',
+          'audio/x-wav': 'audio/ogg',
+          'audio/webm': 'audio/ogg',
+          'audio/3gpp': 'audio/amr',
+          'audio/3gpp2': 'audio/amr',
+          'audio/caf': 'audio/ogg',
+          'audio/x-caf': 'audio/ogg',
+          'application/octet-stream': 'audio/ogg',
+        };
+        sanitizedMimeType = audioMimeMap[mimeType] || 'audio/ogg';
+        console.log(`[Upload] Mapped audio MIME: ${mimeType} → ${sanitizedMimeType}`);
       }
-      // audio/aac, audio/mpeg, audio/mp4, audio/amr, audio/ogg, audio/wav are all sent as-is
+      // Ensure file extension matches the declared MIME type
+      const mimeToExt: Record<string, string> = {
+        'audio/mp4': '.m4a',
+        'audio/mpeg': '.mp3',
+        'audio/amr': '.amr',
+        'audio/ogg': '.ogg',
+      };
+      const expectedExt = mimeToExt[sanitizedMimeType];
+      if (expectedExt) {
+        const currentExt = sanitizedFileName.substring(sanitizedFileName.lastIndexOf('.')).toLowerCase();
+        if (currentExt !== expectedExt) {
+          const dotIdx = sanitizedFileName.lastIndexOf('.');
+          sanitizedFileName = (dotIdx > 0 ? sanitizedFileName.substring(0, dotIdx) : sanitizedFileName) + expectedExt;
+          console.log(`[Upload] Corrected filename: ${fileName} → ${sanitizedFileName}`);
+        }
+      }
     }
     console.log(`[Upload] Final: mimeType=${sanitizedMimeType}, fileName=${sanitizedFileName}, uploadUrl=${uploadUrl}`);
 

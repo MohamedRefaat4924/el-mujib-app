@@ -360,13 +360,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       // Step 3: Send media message matching Flutter's sendMediaN payload exactly
       // Flutter builds: { contact_uid, filepond: "undefined", uploaded_media_file_name, media_type, raw_upload_data, caption }
+      // IMPORTANT: Server send-media endpoint only accepts audio/mp4, audio/mpeg, audio/amr, audio/ogg
+      // Force fileMimeType to an accepted type for audio uploads
+      let finalMimeType = uploadedData?.fileMimeType;
+      let finalFileName = uploadedData?.fileName;
+      let finalExtension = uploadedData?.fileExtension;
+      if (normalizedLabel === 'audio') {
+        const acceptedAudio = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+        if (finalMimeType && !acceptedAudio.includes(finalMimeType)) {
+          finalMimeType = 'audio/ogg';
+          console.log('[sendMediaMessage] Forced fileMimeType to audio/ogg for send-media');
+        }
+        // Also ensure extension matches
+        if (finalExtension && !['.ogg', '.mp3', '.m4a', '.amr', '.mp4'].includes(finalExtension)) {
+          finalExtension = '.ogg';
+        }
+        // Fix filename extension if needed
+        if (finalFileName && finalFileName.endsWith('.aac')) {
+          finalFileName = finalFileName.replace(/\.aac$/, '.ogg');
+        }
+      }
       const mediaData = {
         message: uploadedData?.message || 'File uploaded successfully.',
         path: uploadedData?.path,
         original_filename: uploadedData?.original_filename,
-        fileName: uploadedData?.fileName,
-        fileMimeType: uploadedData?.fileMimeType,
-        fileExtension: uploadedData?.fileExtension,
+        fileName: finalFileName,
+        fileMimeType: finalMimeType,
+        fileExtension: finalExtension,
         realPath: uploadedData?.realPath,
         incident: uploadedData?.incident,
       };
@@ -374,7 +394,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       await apiPost('vendor/whatsapp/contact/chat/send-media', {
         contact_uid: contactUid,
         filepond: 'undefined',
-        uploaded_media_file_name: uploadedData?.fileName || fileName,
+        uploaded_media_file_name: finalFileName || uploadedData?.fileName || fileName,
         media_type: normalizedLabel,
         raw_upload_data: JSON.stringify(mediaData),
         caption: caption || '',

@@ -80,3 +80,4 @@
 - [x] Fix voice upload: reverted MIME sanitization to match Flutter exactly - audio/aac sent as-is (Flutter data_transport.dart confirms server accepts it)
 - [x] Review Flutter saved audio send flow and replicate exactly (cycle: prepare-send-media → upload-temp-media → send-media)
 - [x] Redesign UI with fresh modern colors (#1A6B3C deep forest green), new audio player (progress bar + thumb + solid play button), updated bubbles (#E8F5E2 outgoing)
+- [x] Bug: Voice upload STILL rejected with audio/aac - fixed: now sends audio/ogg everywhere (recording, upload, raw_upload_data, filename)

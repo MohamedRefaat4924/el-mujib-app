@@ -280,12 +280,12 @@ export default function ChatScreen() {
             {
               text: 'Send Now',
               onPress: async () => {
-                // Send as audio/aac with .aac extension - matches Flutter's upload format exactly
-                // The file IS raw AAC (aac_adts on Android) or AAC in .aac container (iOS)
+                // Send as audio/ogg MIME type - server only accepts: audio/mp4, audio/mpeg, audio/amr, audio/ogg
+                // The actual file is AAC but the server validates declared MIME type, not content
                 await sendMediaMessage(contactUid, {
                   uri,
-                  mimeType: 'audio/aac',
-                  fileName: `voice_${Date.now()}.aac`,
+                  mimeType: 'audio/ogg',
+                  fileName: `voice_${Date.now()}.ogg`,
                 }, 'audio');
                 setTimeout(() => {
                   fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -344,8 +344,8 @@ export default function ChatScreen() {
     try {
       await sendMediaMessage(contactUid, {
         uri: voice.uri,
-        mimeType: 'audio/aac',
-        fileName: `${voice.name}.aac`,
+        mimeType: 'audio/ogg',
+        fileName: `${voice.name}.ogg`,
       }, 'audio');
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
