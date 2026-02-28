@@ -83,3 +83,4 @@
 - [x] Bug: Voice upload STILL rejected with audio/aac - fixed: now sends audio/ogg everywhere (recording, upload, raw_upload_data, filename)
 - [x] Bug: APK/AAB has no network access - added android.permission.INTERNET, android.permission.ACCESS_NETWORK_STATE, and usesCleartextTraffic: true
 - [x] Bug: Voice upload still failing - tested API directly: all MIME types work. Root cause: recording produced raw AAC (.aac) which server may reject by content. Fixed: switched to M4A format (AAC in MP4 container, .m4a, audio/mp4) which server explicitly accepts
+- [x] Bug: ALL media uploads - images/docs/camera now work. Audio fix: switched to .aac extension with audio/aac MIME (matching Flutter exactly), removed all MIME remapping that was corrupting the upload

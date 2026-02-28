@@ -306,11 +306,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (normalizedLabel === 'documento') normalizedLabel = 'document';
       if (normalizedLabel === 'immagine') normalizedLabel = 'image';
 
+      console.log('[sendMediaMessage] === STEP 1: prepare-send-media ===');
       // Step 1: Call prepare-send-media (matching Flutter's getChatMedia)
       try {
-        await apiGet(`vendor/whatsapp/contact/chat/prepare-send-media/${normalizedLabel}`);
-      } catch (prepErr) {
-        console.warn('prepare-send-media warning (non-fatal):', prepErr);
+        const prepResult = await apiGet(`vendor/whatsapp/contact/chat/prepare-send-media/${normalizedLabel}`);
+        console.log('[sendMediaMessage] Step 1 SUCCESS:', JSON.stringify(prepResult)?.substring(0, 200));
+      } catch (prepErr: any) {
+        console.warn('[sendMediaMessage] Step 1 WARNING (non-fatal):', prepErr?.message || prepErr);
         // Continue even if this fails - it's a preparation step
       }
 
@@ -335,51 +337,47 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const fileName = file.fileName || file.name || `file.${normalizedLabel}`;
       const mimeType = file.mimeType || file.type || 'application/octet-stream';
 
-      console.log('[sendMediaMessage] Extracted from file object:', {
-        fileUri: fileUri?.substring(0, 80),
+      console.log('[sendMediaMessage] === STEP 2: upload file ===', {
+        fileUri: fileUri?.substring(0, 100),
         fileName,
         mimeType,
         uploadPath,
         normalizedLabel,
-        fileKeys: Object.keys(file),
+        fileKeys: typeof file === 'object' ? Object.keys(file) : ['string'],
       });
 
       // Step 2: Upload file using 'filepond' field name (matching Flutter data_transport.uploadFile)
-      const uploadResponse = await uploadFile(
-        fileUri,
-        fileName,
-        mimeType,
-        uploadPath,
-      );
+      let uploadResponse;
+      try {
+        uploadResponse = await uploadFile(
+          fileUri,
+          fileName,
+          mimeType,
+          uploadPath,
+        );
+        console.log('[sendMediaMessage] Step 2 UPLOAD SUCCESS:', JSON.stringify(uploadResponse)?.substring(0, 300));
+      } catch (uploadErr: any) {
+        console.error('[sendMediaMessage] Step 2 UPLOAD FAILED:', uploadErr?.message || uploadErr);
+        throw new Error(`Upload step failed: ${uploadErr?.message || 'Unknown error'}`);
+      }
 
       if (!uploadResponse?.data) {
+        console.error('[sendMediaMessage] Step 2 UPLOAD returned no data:', JSON.stringify(uploadResponse)?.substring(0, 300));
         throw new Error('Upload failed - no data returned');
       }
 
       const uploadedData = uploadResponse.data;
+      console.log('[sendMediaMessage] uploadedData:', JSON.stringify(uploadedData)?.substring(0, 300));
 
       // Step 3: Send media message matching Flutter's sendMediaN payload exactly
       // Flutter builds: { contact_uid, filepond: "undefined", uploaded_media_file_name, media_type, raw_upload_data, caption }
-      // IMPORTANT: Server send-media endpoint only accepts audio/mp4, audio/mpeg, audio/amr, audio/ogg
-      // Force fileMimeType to an accepted type for audio uploads
+      // Pass through the uploaded data as-is - matching Flutter behavior.
+      // Flutter does NOT modify the upload response data before sending to send-media.
+      // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
       let finalMimeType = uploadedData?.fileMimeType;
       let finalFileName = uploadedData?.fileName;
       let finalExtension = uploadedData?.fileExtension;
-      if (normalizedLabel === 'audio') {
-        const acceptedAudio = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
-        if (finalMimeType && !acceptedAudio.includes(finalMimeType)) {
-          finalMimeType = 'audio/mp4';
-          console.log('[sendMediaMessage] Forced fileMimeType to audio/mp4 for send-media');
-        }
-        // Also ensure extension matches
-        if (finalExtension && !['ogg', 'mp3', 'm4a', 'amr', 'mp4'].includes(finalExtension)) {
-          finalExtension = 'm4a';
-        }
-        // Fix filename extension if needed
-        if (finalFileName && finalFileName.endsWith('.aac')) {
-          finalFileName = finalFileName.replace(/\.aac$/, '.m4a');
-        }
-      }
+      console.log('[sendMediaMessage] Upload response data:', { finalMimeType, finalFileName, finalExtension });
       const mediaData = {
         message: uploadedData?.message || 'File uploaded successfully.',
         path: uploadedData?.path,
@@ -391,16 +389,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         incident: uploadedData?.incident,
       };
 
-      await apiPost('vendor/whatsapp/contact/chat/send-media', {
+      const sendPayload = {
         contact_uid: contactUid,
         filepond: 'undefined',
         uploaded_media_file_name: finalFileName || uploadedData?.fileName || fileName,
         media_type: normalizedLabel,
         raw_upload_data: JSON.stringify(mediaData),
         caption: caption || '',
-      });
-    } catch (e) {
-      console.error('Error sending media:', e);
+      };
+      console.log('[sendMediaMessage] === STEP 3: send-media ===', JSON.stringify(sendPayload)?.substring(0, 500));
+      try {
+        const sendResult = await apiPost('vendor/whatsapp/contact/chat/send-media', sendPayload);
+        console.log('[sendMediaMessage] Step 3 SEND SUCCESS:', JSON.stringify(sendResult)?.substring(0, 200));
+      } catch (sendErr: any) {
+        console.error('[sendMediaMessage] Step 3 SEND FAILED:', sendErr?.message || sendErr);
+        throw sendErr;
+      }
+    } catch (e: any) {
+      console.error('[sendMediaMessage] OVERALL ERROR:', e?.message || e);
     } finally {
       dispatch({ type: 'SET_SENDING', payload: false });
     }
