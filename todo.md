@@ -57,7 +57,10 @@
 - [x] Fix upload 406 error: match Flutter's upload flow exactly (add prepare-send-media step, improve error handling)
 - [x] Fix quick reply not working (toggle always works, filter by input, show on focus)
 - [x] Fix interactive message rendering (parse template_message HTML for buttons/lists, render natively)
-- [ ] Fix duplicate key warning in contacts list FlatList
+- [x] Fix duplicate key warning in contacts list FlatList (fixed contactExists and ADD_NEW_CONTACT dedup logic)
 - [x] Fix voice recording send error (MIME type audio/m4a → audio/mp4, added server-side MIME sanitization)
 - [x] Redesign quick reply: user-managed custom quick replies (add/delete, long-press to delete)
 - [x] Replace template sending with saved voice messages feature (record → save for later → send from library)
+- [x] Bug: Voice recording 406 error - changed to AAC format (.aac extension, audio/aac MIME), added robust MIME sanitization with fallback mapping
+- [x] Bug: New messages not appearing in real-time in chat - added Pusher listener in chat screen with multi-listener support
+- [x] Bug: Duplicate contacts in home page - fixed contactExists to check both key and _uid, fixed ADD_NEW_CONTACT and UPDATE_CONTACT_NEW_MESSAGE to prevent duplicates

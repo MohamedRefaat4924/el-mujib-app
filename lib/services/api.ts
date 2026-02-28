@@ -316,24 +316,44 @@ export async function uploadFile(
 
     // Sanitize audio MIME types - server only accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
     let sanitizedMimeType = mimeType;
-    if (uploadUrl.includes('whatsapp_audio')) {
+    let sanitizedFileName = fileName;
+    if (uploadUrl.includes('whatsapp_audio') || uploadUrl.includes('audio')) {
       const acceptedAudioTypes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
       if (!acceptedAudioTypes.includes(mimeType)) {
         // Map common unsupported types to accepted ones
         const mimeMap: Record<string, string> = {
-          'audio/m4a': 'audio/mp4',
-          'audio/x-m4a': 'audio/mp4',
-          'audio/mp4a-latm': 'audio/mp4',
+          'audio/m4a': 'audio/aac',
+          'audio/x-m4a': 'audio/aac',
+          'audio/mp4a-latm': 'audio/aac',
           'audio/wav': 'audio/ogg',
           'audio/x-wav': 'audio/ogg',
           'audio/webm': 'audio/ogg',
           'audio/3gpp': 'audio/amr',
           'audio/3gpp2': 'audio/amr',
+          'audio/caf': 'audio/aac',
+          'audio/x-caf': 'audio/aac',
+          'application/octet-stream': 'audio/aac',
         };
-        sanitizedMimeType = mimeMap[mimeType] || 'audio/mp4';
+        sanitizedMimeType = mimeMap[mimeType] || 'audio/aac';
         console.log(`[Upload] Sanitized audio MIME type: ${mimeType} → ${sanitizedMimeType}`);
       }
+      // Also ensure file extension matches the MIME type
+      const mimeToExt: Record<string, string> = {
+        'audio/aac': '.aac',
+        'audio/mp4': '.mp4',
+        'audio/mpeg': '.mp3',
+        'audio/amr': '.amr',
+        'audio/ogg': '.ogg',
+      };
+      const expectedExt = mimeToExt[sanitizedMimeType];
+      if (expectedExt && !sanitizedFileName.toLowerCase().endsWith(expectedExt)) {
+        // Replace or add the correct extension
+        const dotIdx = sanitizedFileName.lastIndexOf('.');
+        sanitizedFileName = (dotIdx > 0 ? sanitizedFileName.substring(0, dotIdx) : sanitizedFileName) + expectedExt;
+        console.log(`[Upload] Corrected file name: ${fileName} → ${sanitizedFileName}`);
+      }
     }
+    console.log(`[Upload] Final: mimeType=${sanitizedMimeType}, fileName=${sanitizedFileName}, uploadUrl=${uploadUrl}`);
 
     // Add additional input data fields (Flutter: request.fields.addAll(inputData))
     if (options?.inputData) {
@@ -349,18 +369,18 @@ export async function uploadFile(
       const response = await fetch(fileUri);
       const blob = await response.blob();
       // Create a File object with proper name and type for web
-      const file = new File([blob], fileName, { type: sanitizedMimeType });
+      const file = new File([blob], sanitizedFileName, { type: sanitizedMimeType });
       formData.append('filepond', file);
     } else {
       // For React Native, we pass an object with uri, type, name
       formData.append('filepond', {
         uri: fileUri,
         type: sanitizedMimeType,
-        name: fileName,
+        name: sanitizedFileName,
       } as any);
     }
 
-    console.log(`[Upload] Uploading to ${apiUrl}${uploadUrl} file=${fileName} type=${sanitizedMimeType}`);
+    console.log(`[Upload] Uploading to ${apiUrl}${uploadUrl} file=${sanitizedFileName} type=${sanitizedMimeType}`);
 
     const response = await fetch(`${apiUrl}${uploadUrl}`, {
       method: 'POST',

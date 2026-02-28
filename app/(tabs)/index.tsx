@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/lib/stores/auth-store';
 import { useContacts } from '@/lib/stores/contacts-store';
-import { initPusher, subscribeToChannel, disconnectPusher } from '@/lib/services/pusher';
+import { initPusher, subscribeToChannel, removeListener, disconnectPusher } from '@/lib/services/pusher';
 import { getApiUrl } from '@/lib/services/api';
 import { ScreenContainer } from '@/components/screen-container';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -104,7 +104,7 @@ export default function ContactsScreen() {
           onSubscriptionError: (error) => {
             console.error('[Pusher] Subscription error:', error);
           },
-        });
+        }, 'home-contacts');
       }
     } catch (e) {
       console.error('Pusher init error:', e);

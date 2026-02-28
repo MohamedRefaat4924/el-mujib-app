@@ -104,18 +104,23 @@ function contactsReducer(state: ContactsState, action: ContactsAction): Contacts
     }
     case 'UPDATE_CONTACT_NEW_MESSAGE': {
       const { contactUid, lastMessageUid, formattedTime } = action.payload;
-      const idx = state.contactsList.findIndex(c => c.key === contactUid);
+      // Check both key and _uid to find the contact (prevents duplicates)
+      const idx = state.contactsList.findIndex(
+        c => c.key === contactUid || c.value._uid === contactUid
+      );
       let newList = [...state.contactsList];
       if (idx !== -1) {
         const entry = newList[idx];
         const updatedContact = {
           ...entry.value,
-          last_message: { formatted_message_time: 'Just now', _uid: lastMessageUid },
+          last_message: { formatted_message_time: formattedTime || 'Just now', _uid: lastMessageUid },
           unread_messages_count: (entry.value.unread_messages_count || 0) + 1,
         };
+        // Remove from current position and move to top (like Flutter)
         newList.splice(idx, 1);
-        newList.unshift({ key: contactUid, value: updatedContact });
+        newList.unshift({ key: entry.key, value: updatedContact });
       } else {
+        // Only add new entry if truly not found
         newList.unshift({
           key: contactUid,
           value: {
@@ -125,22 +130,57 @@ function contactsReducer(state: ContactsState, action: ContactsAction): Contacts
             wa_id: '',
             unread_messages_count: 1,
             labels: [],
-            last_message: { formatted_message_time: 'Just now', _uid: lastMessageUid },
+            last_message: { formatted_message_time: formattedTime || 'Just now', _uid: lastMessageUid },
           },
         });
+      }
+      // Also update originalContactsList to keep in sync
+      const origIdx = state.originalContactsList.findIndex(
+        c => c.key === contactUid || c.value._uid === contactUid
+      );
+      let newOrigList = [...state.originalContactsList];
+      if (origIdx !== -1) {
+        const origEntry = newOrigList[origIdx];
+        newOrigList[origIdx] = {
+          ...origEntry,
+          value: {
+            ...origEntry.value,
+            last_message: { formatted_message_time: formattedTime || 'Just now', _uid: lastMessageUid },
+            unread_messages_count: (origEntry.value.unread_messages_count || 0) + 1,
+          },
+        };
       }
       return {
         ...state,
         contactsList: newList,
+        originalContactsList: newOrigList,
         unreadMsgCount: state.unreadMsgCount + 1,
       };
     }
-    case 'ADD_NEW_CONTACT':
+    case 'ADD_NEW_CONTACT': {
+      // Prevent duplicates - check both key and _uid
+      const newEntry = action.payload;
+      const alreadyExists = state.contactsList.some(
+        c => c.key === newEntry.key || c.value._uid === newEntry.value._uid
+      );
+      if (alreadyExists) {
+        // Update existing contact instead of adding duplicate
+        return {
+          ...state,
+          contactsList: state.contactsList.map(c =>
+            (c.key === newEntry.key || c.value._uid === newEntry.value._uid) ? newEntry : c
+          ),
+          originalContactsList: state.originalContactsList.map(c =>
+            (c.key === newEntry.key || c.value._uid === newEntry.value._uid) ? newEntry : c
+          ),
+        };
+      }
       return {
         ...state,
-        contactsList: [action.payload, ...state.contactsList],
-        originalContactsList: [action.payload, ...state.originalContactsList],
+        contactsList: [newEntry, ...state.contactsList],
+        originalContactsList: [newEntry, ...state.originalContactsList],
       };
+    }
     case 'SET_VENDOR_USERS':
       return { ...state, vendorMessagingUsers: action.payload };
     case 'SET_LABELS':
@@ -324,7 +364,12 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const contactExists = useCallback((contactUid: string): boolean => {
-    return state.contactsList.some(entry => entry.value._uid === contactUid);
+    // Check both key and _uid to prevent duplicates
+    // Flutter checks: contactsList.any((entry) => entry.value['_uid'] == contactUid)
+    // But the Pusher event sends contactUid which may match the key field
+    return state.contactsList.some(
+      entry => entry.value._uid === contactUid || entry.key === contactUid
+    );
   }, [state.contactsList]);
 
   return (
