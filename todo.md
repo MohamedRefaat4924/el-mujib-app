@@ -76,3 +76,4 @@
 - [x] Change Android package name to com.elmujib.direct for Google Play Store
 - [x] Configure signing keystore (upload-keystore.jks) for AAB build
 - [x] Guide user to build AAB via Publish button
+- [x] Update app version to 7.5.0 (versionCode 14) - higher than current Play Store release 7.4.0 (code 13)
