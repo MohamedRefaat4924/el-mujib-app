@@ -31,7 +31,10 @@ import { useAuth } from '@/lib/stores/auth-store';
 import { useChat, SavedVoiceMessage } from '@/lib/stores/chat-store';
 import { useContacts } from '@/lib/stores/contacts-store';
 import { MessageBubble } from '@/components/chat/message-bubble';
+import { ImageGallery } from '@/components/chat/image-gallery';
 import { ChatMessage } from '@/lib/types';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 
 // Recording preset - platform-specific formats:
 // iOS: MPEG4AAC codec always produces M4A/MP4 container → send as audio/mp4 with .m4a
@@ -68,6 +71,41 @@ const VOICE_MIME_TYPE = Platform.OS === 'ios' ? 'audio/mp4' : 'audio/aac';
 const VOICE_EXTENSION = Platform.OS === 'ios' ? '.m4a' : '.aac';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Extract copyable text content from a message
+function getMessageTextContent(msg: ChatMessage): string | null {
+  // Text messages
+  if (msg.message_type === 'text') {
+    const text = msg.formatted_message || '';
+    // Strip HTML tags
+    return text
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .trim() || null;
+  }
+  // Image/video captions
+  if (msg.message_type === 'image' || msg.message_type === 'video') {
+    return msg.__data?.caption || msg.formatted_message || null;
+  }
+  // Template messages
+  if (msg.template_message) {
+    return msg.template_message
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ')
+      .trim() || null;
+  }
+  // Fallback to formatted_message
+  return msg.formatted_message || null;
+}
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{
@@ -107,6 +145,8 @@ export default function ChatScreen() {
   const [newQuickReplyText, setNewQuickReplyText] = useState('');
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [savingVoiceName, setSavingVoiceName] = useState('');
+  const [galleryImageUrl, setGalleryImageUrl] = useState<string | null>(null);
+  const [showCopyMenu, setShowCopyMenu] = useState<{ message: ChatMessage; y: number } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
 
@@ -420,6 +460,32 @@ export default function ChatScreen() {
     }, 1000);
   }, [contactUid, vendorUid, sendTextMessage, fetchMessages]);
 
+  // Long-press on message: show copy option
+  const handleMessageLongPress = useCallback((msg: ChatMessage) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    const textContent = getMessageTextContent(msg);
+    if (textContent) {
+      Alert.alert(
+        'Message Options',
+        undefined,
+        [
+          {
+            text: 'Copy Text',
+            onPress: async () => {
+              await Clipboard.setStringAsync(textContent);
+              if (Platform.OS !== 'web') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+    }
+  }, []);
+
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -468,6 +534,8 @@ export default function ChatScreen() {
               <MessageBubble
                 message={item}
                 onInteractiveButtonPress={handleInteractiveButton}
+                onImagePress={(url) => setGalleryImageUrl(url)}
+                onLongPress={handleMessageLongPress}
               />
             )}
             inverted
@@ -762,6 +830,15 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+      {/* Image Gallery Viewer */}
+      {galleryImageUrl && (
+        <ImageGallery
+          visible={!!galleryImageUrl}
+          initialImageUrl={galleryImageUrl}
+          messages={chatState.messages}
+          onClose={() => setGalleryImageUrl(null)}
+        />
+      )}
     </View>
   );
 }

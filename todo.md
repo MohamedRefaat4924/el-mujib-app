@@ -88,3 +88,5 @@
 - [x] Bug: Audio upload 406 on BOTH iOS and Android - Fixed: read audio file as base64 via expo-file-system, create Blob with explicit MIME type, bypassing RN native FormData MIME override
 - [x] Add sound notification on new messages (plays notification.mp3 via expo-audio on Pusher event)
 - [x] Add local push notification for new messages (expo-notifications with tap-to-navigate to chat)
+- [x] Add image gallery viewer: tap image in chat to open fullscreen, swipe to browse other images in conversation
+- [x] Add copy message option: long-press on message to copy text content (with haptic feedback)

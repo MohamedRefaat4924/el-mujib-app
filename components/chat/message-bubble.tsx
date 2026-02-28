@@ -1,12 +1,12 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   Linking,
   Dimensions,
-  Modal,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -20,6 +20,7 @@ interface MessageBubbleProps {
   message: ChatMessage;
   onInteractiveButtonPress?: (id: string, title: string) => void;
   onImagePress?: (url: string) => void;
+  onLongPress?: (message: ChatMessage) => void;
 }
 
 // Parse HTML template_message into renderable components
@@ -141,9 +142,8 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-export function MessageBubble({ message, onInteractiveButtonPress, onImagePress }: MessageBubbleProps) {
+export function MessageBubble({ message, onInteractiveButtonPress, onImagePress, onLongPress }: MessageBubbleProps) {
   const isOutgoing = message.message_from === 2;
-  const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
   // Parse template_message HTML if present
   const templateData = useMemo(() => {
@@ -208,10 +208,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
         {/* Header Image */}
         {templateData.headerImageUrl && (
           <TouchableOpacity
-            onPress={() => {
-              setImageViewerUrl(templateData.headerImageUrl!);
-              onImagePress?.(templateData.headerImageUrl!);
-            }}
+            onPress={() => onImagePress?.(templateData.headerImageUrl!)}
             activeOpacity={0.9}
           >
             <ExpoImage
@@ -296,10 +293,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
       <View>
         {mediaUrl ? (
           <TouchableOpacity
-            onPress={() => {
-              setImageViewerUrl(mediaUrl);
-              onImagePress?.(mediaUrl);
-            }}
+            onPress={() => onImagePress?.(mediaUrl)}
             activeOpacity={0.9}
           >
             <ExpoImage
@@ -318,20 +312,6 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
         {caption ? (
           <Text style={[styles.captionText, isOutgoing && styles.outgoingText]}>{caption}</Text>
         ) : null}
-        {imageViewerUrl && (
-          <Modal visible transparent animationType="fade" onRequestClose={() => setImageViewerUrl(null)}>
-            <View style={styles.imageViewerOverlay}>
-              <TouchableOpacity style={styles.imageViewerClose} onPress={() => setImageViewerUrl(null)}>
-                <MaterialIcons name="close" size={28} color="#fff" />
-              </TouchableOpacity>
-              <ExpoImage
-                source={{ uri: imageViewerUrl }}
-                style={styles.imageViewerImage}
-                contentFit="contain"
-              />
-            </View>
-          </Modal>
-        )}
       </View>
     );
   };
@@ -690,11 +670,14 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
 
   return (
     <View style={[styles.bubbleRow, isOutgoing ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
-      <View
-        style={[
+      <Pressable
+        onLongPress={() => onLongPress?.(message)}
+        delayLongPress={400}
+        style={({ pressed }) => [
           styles.bubble,
           isOutgoing ? styles.outgoingBubble : styles.incomingBubble,
           message.message_type === 'sticker' && styles.stickerBubble,
+          pressed && { opacity: 0.85 },
         ]}
       >
         {renderContent()}
@@ -710,7 +693,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
             <Text style={styles.errorText}>{message.whatsapp_message_error}</Text>
           </View>
         )}
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -985,21 +968,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#F5365C',
   },
-  imageViewerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageViewerClose: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-  },
-  imageViewerImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
-  },
+
 });
