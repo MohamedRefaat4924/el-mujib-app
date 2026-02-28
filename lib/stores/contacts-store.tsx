@@ -297,7 +297,10 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
 
   const fetchChatBoxData = useCallback(async (userId?: string) => {
     try {
-      const response = await apiGet(`vendor/whatsapp/contact/chat-box-data/${userId || ''}`);
+      // Flutter: userId is null when called from whatsapp_chat.dart (contacts list)
+      // So the endpoint becomes: vendor/whatsapp/contact/chat-box-data/null
+      // When called from user_info.dart, userId is the actual contact UID
+      const response = await apiGet(`vendor/whatsapp/contact/chat-box-data/${userId || 'null'}`);
       if (response?.data) {
         const users = (response.data.vendorMessagingUsers || []).map((user: any) => ({
           id: String(user._id),

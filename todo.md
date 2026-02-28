@@ -51,3 +51,6 @@
 - [x] Fix JSON parse error on login (unexpected character : l)
 - [x] Fix RSA encryption: use correct node-forge API (RSAES-PKCS1-V1_5)
 - [x] Remove Demo Company Login button from login screen
+- [x] Fix chat-box-data endpoint: pass 'null' like Flutter when no userId
+- [x] Fix messages fetch: POST → GET, matching Flutter's data_transport.get()
+- [x] Fix fetchChatBoxData endpoint URL construction

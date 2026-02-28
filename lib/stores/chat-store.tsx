@@ -1,8 +1,55 @@
 import React, { createContext, useContext, useReducer, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiGet, apiPost, uploadFile, getItemValue } from '../services/api';
-import { ChatMessage, WhatsAppTemplate } from '../types';
+import { ChatMessage, WhatsAppTemplate, MessageFrom, MessageType, MessageStatus } from '../types';
 import { Platform } from 'react-native';
+
+// Helper to parse a raw message object from the API into our ChatMessage type
+// Matches Flutter's _parseAndAddMessages logic
+function parseMessageFromApi(value: any): ChatMessage {
+  const mediaValues = value?.__data?.media_values || {};
+  const isIncoming = value?.is_incoming_message;
+  // Flutter: message_from = isIncoming ? 1 : 2
+  const messageFrom: MessageFrom = isIncoming === true || isIncoming === 1 ? 1 : 2;
+
+  // Determine message type from __data or media_values
+  let messageType: MessageType = 'text';
+  const rawType = value?.__data?.type || mediaValues?.type || value?.message_type || '';
+  if (['image', 'audio', 'video', 'document', 'sticker', 'contacts', 'location', 'interactive', 'template', 'reaction'].includes(rawType)) {
+    messageType = rawType as MessageType;
+  } else if (value?.template_message) {
+    messageType = 'template';
+  }
+
+  // Determine status
+  let status: MessageStatus = 'sent';
+  const rawStatus = value?.status || '';
+  if (['sent', 'delivered', 'read', 'failed', 'pending'].includes(rawStatus)) {
+    status = rawStatus as MessageStatus;
+  }
+
+  return {
+    _uid: value?._uid || value?._id || String(Math.random()),
+    status,
+    message_from: messageFrom,
+    message_type: messageType,
+    formatted_message: value?.message || value?.formatted_message || '',
+    formatted_message_time: value?.formatted_message_time || '',
+    whatsapp_message_error: value?.whatsapp_message_error || '',
+    __data: {
+      interaction_message_data: value?.__data?.interaction_message_data,
+      template_message_data: value?.__data?.template_message_data,
+      contact_data: value?.__data?.contact_data,
+      media_url: mediaValues?.link || value?.__data?.media_url || '',
+      caption: mediaValues?.caption || value?.__data?.caption || '',
+      latitude: value?.__data?.latitude,
+      longitude: value?.__data?.longitude,
+      filename: mediaValues?.file_name || mediaValues?.original_filename || value?.__data?.filename || '',
+      mime_type: mediaValues?.mime_type || value?.__data?.mime_type || '',
+    },
+    reaction: value?.reaction,
+  };
+}
 
 const MESSAGE_CACHE_PREFIX = '@el_mujib_messages_';
 const QUICK_REPLIES_KEY = '@el_mujib_quick_replies';
@@ -124,8 +171,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const loadingRef = useRef(false);
 
   // Fetch messages matching Flutter's chatbox_controller.dart getUserChat()
-  // Endpoint: vendor/whatsapp/contact/chat/{userId}?assigned=
-  // Flutter uses POST with inputData: {"contact_uid": userId}
+  // Flutter uses data_transport.get() (GET method)
+  // Initial: vendor/whatsapp/contact/chat/{userId}?assigned=
+  // Pagination: vendor/whatsapp/contact/chat/{userId}?way=prepend&assigned=&page={page}
+  // Response: response.client_models.whatsappMessageLogs (Map, not Array)
   const fetchMessages = useCallback(async (
     vendorUid: string,
     contactUid: string,
@@ -139,32 +188,39 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadingRef.current = true;
 
     if (isRefresh) {
-      pageRef.current = 1;
+      pageRef.current = 2; // Flutter starts currentPage at 2 (page 1 is initial load)
       dispatch({ type: 'SET_LOADING', payload: true });
     } else {
       dispatch({ type: 'SET_LOADING_MORE', payload: true });
     }
 
     try {
-      // Flutter endpoint: vendor/whatsapp/contact/chat/{userId}?assigned=
-      // It's a POST request with contact_uid in the body
-      const response = await apiPost(
-        `vendor/whatsapp/contact/chat/${contactUid}?page=${pageRef.current}`,
-        { contact_uid: contactUid }
-      );
+      // Flutter getUserChat: data_transport.get('vendor/whatsapp/contact/chat/$userId?assigned=')
+      // Flutter loadMoreMessages2: data_transport.get('vendor/whatsapp/contact/chat/$userId?way=prepend&assigned=&page=$currentPage')
+      let endpoint: string;
+      if (isRefresh) {
+        endpoint = `vendor/whatsapp/contact/chat/${contactUid}?assigned=`;
+      } else {
+        endpoint = `vendor/whatsapp/contact/chat/${contactUid}?way=prepend&assigned=&page=${pageRef.current}`;
+      }
+
+      const response = await apiGet(endpoint);
 
       if (response) {
-        // Flutter extracts: response['data']['whatsappMessageLogs']
-        const messagesData = getItemValue(response, 'data.whatsappMessageLogs') ||
-                            getItemValue(response, 'data.messages') ||
-                            response?.data || [];
+        // Flutter extracts: response['client_models']['whatsappMessageLogs']
+        // This is a Map (object), not an Array - Flutter iterates with forEach
+        const messagesData = getItemValue(response, 'client_models.whatsappMessageLogs') ||
+                            getItemValue(response, 'data.whatsappMessageLogs') || {};
 
         let messagesList: ChatMessage[] = [];
         if (Array.isArray(messagesData)) {
           messagesList = messagesData;
-        } else if (typeof messagesData === 'object') {
-          // Flutter iterates over map values
-          messagesList = Object.values(messagesData);
+        } else if (typeof messagesData === 'object' && messagesData !== null) {
+          // Flutter iterates over map values with forEach((key, value))
+          messagesList = Object.values(messagesData).map((value: any) => {
+            // Parse each message matching Flutter's _parseAndAddMessages
+            return parseMessageFromApi(value);
+          });
         }
 
         if (messagesList.length === 0 && !isRefresh) {
@@ -178,6 +234,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             pageRef.current += 1;
             dispatch({ type: 'INCREMENT_PAGE' });
           }
+        }
+
+        // Also extract assignedLabelIds from response (Flutter does this too)
+        const labelIds = getItemValue(response, 'client_models.assignedLabelIds');
+        if (labelIds) {
+          // Store in state if needed later
         }
       }
     } catch (e) {
