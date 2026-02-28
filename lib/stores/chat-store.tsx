@@ -368,16 +368,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (normalizedLabel === 'audio') {
         const acceptedAudio = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
         if (finalMimeType && !acceptedAudio.includes(finalMimeType)) {
-          finalMimeType = 'audio/ogg';
-          console.log('[sendMediaMessage] Forced fileMimeType to audio/ogg for send-media');
+          finalMimeType = 'audio/mp4';
+          console.log('[sendMediaMessage] Forced fileMimeType to audio/mp4 for send-media');
         }
         // Also ensure extension matches
-        if (finalExtension && !['.ogg', '.mp3', '.m4a', '.amr', '.mp4'].includes(finalExtension)) {
-          finalExtension = '.ogg';
+        if (finalExtension && !['ogg', 'mp3', 'm4a', 'amr', 'mp4'].includes(finalExtension)) {
+          finalExtension = 'm4a';
         }
         // Fix filename extension if needed
         if (finalFileName && finalFileName.endsWith('.aac')) {
-          finalFileName = finalFileName.replace(/\.aac$/, '.ogg');
+          finalFileName = finalFileName.replace(/\.aac$/, '.m4a');
         }
       }
       const mediaData = {

@@ -325,7 +325,7 @@ export async function uploadFile(
       if (!acceptedAudioTypes.includes(mimeType)) {
         // Map all non-accepted types to accepted ones
         const audioMimeMap: Record<string, string> = {
-          'audio/aac': 'audio/ogg',
+          'audio/aac': 'audio/mp4',
           'audio/m4a': 'audio/mp4',
           'audio/x-m4a': 'audio/mp4',
           'audio/mp4a-latm': 'audio/mp4',
@@ -338,7 +338,7 @@ export async function uploadFile(
           'audio/x-caf': 'audio/ogg',
           'application/octet-stream': 'audio/ogg',
         };
-        sanitizedMimeType = audioMimeMap[mimeType] || 'audio/ogg';
+        sanitizedMimeType = audioMimeMap[mimeType] || 'audio/mp4';
         console.log(`[Upload] Mapped audio MIME: ${mimeType} → ${sanitizedMimeType}`);
       }
       // Ensure file extension matches the declared MIME type
