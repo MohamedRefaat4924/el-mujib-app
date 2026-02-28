@@ -58,3 +58,6 @@
 - [x] Fix quick reply not working (toggle always works, filter by input, show on focus)
 - [x] Fix interactive message rendering (parse template_message HTML for buttons/lists, render natively)
 - [ ] Fix duplicate key warning in contacts list FlatList
+- [x] Fix voice recording send error (MIME type audio/m4a → audio/mp4, added server-side MIME sanitization)
+- [x] Redesign quick reply: user-managed custom quick replies (add/delete, long-press to delete)
+- [x] Replace template sending with saved voice messages feature (record → save for later → send from library)

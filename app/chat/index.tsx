@@ -20,7 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/stores/auth-store';
-import { useChat } from '@/lib/stores/chat-store';
+import { useChat, SavedVoiceMessage } from '@/lib/stores/chat-store';
 import { useContacts } from '@/lib/stores/contacts-store';
 import { subscribeToChannel, unsubscribeFromChannel } from '@/lib/services/pusher';
 import { MessageBubble } from '@/components/chat/message-bubble';
@@ -50,17 +50,24 @@ export default function ChatScreen() {
     saveCachedMessages,
     loadQuickReplies,
     addQuickReply,
+    removeQuickReply,
+    loadSavedVoiceMessages,
+    addSavedVoiceMessage,
+    removeSavedVoiceMessage,
     setContactUid,
   } = useChat();
   const { updateUnreadToZero } = useContacts();
 
   const [messageText, setMessageText] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [showSavedVoices, setShowSavedVoices] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [showAddQuickReply, setShowAddQuickReply] = useState(false);
+  const [newQuickReplyText, setNewQuickReplyText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
-  const [templateSearch, setTemplateSearch] = useState('');
+  const [isSavingVoice, setIsSavingVoice] = useState(false);
+  const [savingVoiceName, setSavingVoiceName] = useState('');
   const flatListRef = useRef<FlatList>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRecorderRef = useRef<any>(null);
@@ -79,6 +86,7 @@ export default function ChatScreen() {
       updateUnreadToZero(contactUid);
       fetchTemplates();
       loadQuickReplies();
+      loadSavedVoiceMessages();
     }
 
     return () => {
@@ -92,14 +100,7 @@ export default function ChatScreen() {
   // Subscribe to real-time updates for this contact
   useEffect(() => {
     if (!vendorUid || !contactUid) return;
-
-    const channelName = `private-vendor-channel.${vendorUid}`;
-    // We subscribe globally in contacts screen, but listen for specific contact messages here
-    // The global subscription handles updating the contact list
-    // Here we just need to refresh messages when we get a new one for this contact
-
     return () => {
-      // Save messages to cache when leaving
       saveCachedMessages(contactUid);
     };
   }, [vendorUid, contactUid]);
@@ -110,7 +111,6 @@ export default function ChatScreen() {
     setMessageText('');
     setShowQuickReplies(false);
     await sendTextMessage(contactUid, text);
-    // Refresh messages after sending
     setTimeout(() => {
       fetchMessages(vendorUid, contactUid, { isRefresh: true });
     }, 1000);
@@ -197,7 +197,6 @@ export default function ChatScreen() {
 
   const handleStartRecording = useCallback(async () => {
     try {
-      // Dynamic import to avoid issues on web
       const { Audio } = await import('expo-av');
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
@@ -234,6 +233,7 @@ export default function ChatScreen() {
         recordingTimerRef.current = null;
       }
 
+      const duration = recordingDuration;
       await audioRecorderRef.current.stopAndUnloadAsync();
       const uri = audioRecorderRef.current.getURI();
       audioRecorderRef.current = null;
@@ -241,20 +241,65 @@ export default function ChatScreen() {
       setRecordingDuration(0);
 
       if (uri) {
-        await sendMediaMessage(contactUid, {
-          uri,
-          mimeType: 'audio/m4a',
-          fileName: 'voice_message.m4a',
-        }, 'audio');
-        setTimeout(() => {
-          fetchMessages(vendorUid, contactUid, { isRefresh: true });
-        }, 1500);
+        // Ask user: Send now or Save for later?
+        Alert.alert(
+          'Voice Message',
+          'What would you like to do with this recording?',
+          [
+            {
+              text: 'Send Now',
+              onPress: async () => {
+                // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+                await sendMediaMessage(contactUid, {
+                  uri,
+                  mimeType: 'audio/mp4',
+                  fileName: 'voice_message.mp4',
+                }, 'audio');
+                setTimeout(() => {
+                  fetchMessages(vendorUid, contactUid, { isRefresh: true });
+                }, 1500);
+              },
+            },
+            {
+              text: 'Save for Later',
+              onPress: () => {
+                setIsSavingVoice(true);
+                setSavingVoiceName('');
+                // Store the uri temporarily
+                audioRecorderRef.current = { savedUri: uri, savedDuration: duration };
+              },
+            },
+            { text: 'Discard', style: 'destructive' },
+          ]
+        );
       }
     } catch (e) {
       console.error('Recording stop error:', e);
       setIsRecording(false);
     }
-  }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
+  }, [contactUid, vendorUid, recordingDuration, sendMediaMessage, fetchMessages]);
+
+  const handleSaveVoiceMessage = useCallback(async () => {
+    const name = savingVoiceName.trim();
+    if (!name) {
+      Alert.alert('Name required', 'Please enter a name for this voice message.');
+      return;
+    }
+    if (!audioRecorderRef.current?.savedUri) return;
+
+    const voice: SavedVoiceMessage = {
+      id: `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      uri: audioRecorderRef.current.savedUri,
+      duration: audioRecorderRef.current.savedDuration || 0,
+      createdAt: Date.now(),
+    };
+
+    await addSavedVoiceMessage(voice);
+    audioRecorderRef.current = null;
+    setIsSavingVoice(false);
+    setSavingVoiceName('');
+  }, [savingVoiceName, addSavedVoiceMessage]);
 
   const handleCancelRecording = useCallback(async () => {
     if (!audioRecorderRef.current) return;
@@ -273,18 +318,65 @@ export default function ChatScreen() {
     }
   }, []);
 
-  const handleSendTemplate = useCallback(async (template: any) => {
-    setShowTemplates(false);
-    await sendTemplateMessage(contactUid, template);
-    setTimeout(() => {
-      fetchMessages(vendorUid, contactUid, { isRefresh: true });
-    }, 1500);
-  }, [contactUid, vendorUid, sendTemplateMessage, fetchMessages]);
+  const handleSendSavedVoice = useCallback(async (voice: SavedVoiceMessage) => {
+    setShowSavedVoices(false);
+    try {
+      await sendMediaMessage(contactUid, {
+        uri: voice.uri,
+        mimeType: 'audio/mp4',
+        fileName: `${voice.name}.mp4`,
+      }, 'audio');
+      setTimeout(() => {
+        fetchMessages(vendorUid, contactUid, { isRefresh: true });
+      }, 1500);
+    } catch (e) {
+      console.error('Error sending saved voice:', e);
+      Alert.alert('Error', 'Failed to send voice message. The file may have been deleted.');
+    }
+  }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
+
+  const handleDeleteSavedVoice = useCallback((voice: SavedVoiceMessage) => {
+    Alert.alert(
+      'Delete Voice Message',
+      `Delete "${voice.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeSavedVoiceMessage(voice.id),
+        },
+      ]
+    );
+  }, [removeSavedVoiceMessage]);
 
   const handleQuickReply = useCallback((reply: string) => {
     setMessageText(reply);
     setShowQuickReplies(false);
   }, []);
+
+  const handleAddQuickReply = useCallback(async () => {
+    const text = newQuickReplyText.trim();
+    if (!text) return;
+    await addQuickReply(text);
+    setNewQuickReplyText('');
+    setShowAddQuickReply(false);
+  }, [newQuickReplyText, addQuickReply]);
+
+  const handleDeleteQuickReply = useCallback((reply: string) => {
+    Alert.alert(
+      'Delete Quick Reply',
+      `Delete "${reply}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeQuickReply(reply),
+        },
+      ]
+    );
+  }, [removeQuickReply]);
 
   const handleLoadMore = useCallback(() => {
     if (!chatState.isLoadingMore && !chatState.hasReachedMax) {
@@ -304,10 +396,6 @@ export default function ChatScreen() {
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
-
-  const filteredTemplates = chatState.templates.filter(t =>
-    !templateSearch || t.template_name?.toLowerCase().includes(templateSearch.toLowerCase())
-  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -368,14 +456,26 @@ export default function ChatScreen() {
         )}
       </View>
 
-      {/* Quick Replies */}
+      {/* Quick Replies Panel */}
       {showQuickReplies && (
         <View style={styles.quickRepliesContainer}>
+          <View style={styles.quickRepliesHeader}>
+            <Text style={styles.quickRepliesTitle}>Quick Replies</Text>
+            <TouchableOpacity
+              onPress={() => setShowAddQuickReply(true)}
+              style={styles.addQuickReplyBtn}
+            >
+              <MaterialIcons name="add" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
           {chatState.quickReplies.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickRepliesScroll}
+            >
               {chatState.quickReplies
                 .filter(reply => {
-                  // Filter quick replies based on current input text
                   if (!messageText.trim()) return true;
                   return reply.toLowerCase().includes(messageText.toLowerCase());
                 })
@@ -384,6 +484,7 @@ export default function ChatScreen() {
                     key={idx}
                     style={styles.quickReplyChip}
                     onPress={() => handleQuickReply(reply)}
+                    onLongPress={() => handleDeleteQuickReply(reply)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.quickReplyText} numberOfLines={1}>{reply}</Text>
@@ -391,7 +492,9 @@ export default function ChatScreen() {
                 ))}
             </ScrollView>
           ) : (
-            <Text style={styles.quickReplyEmptyText}>No quick replies yet. Send messages to build your quick reply list.</Text>
+            <Text style={styles.quickReplyEmptyText}>
+              No quick replies yet. Tap + to add one.
+            </Text>
           )}
         </View>
       )}
@@ -412,7 +515,7 @@ export default function ChatScreen() {
                 <Text style={styles.recordingTime}>{formatDuration(recordingDuration)}</Text>
               </View>
               <TouchableOpacity onPress={handleStopRecording} style={styles.stopRecordBtn}>
-                <MaterialIcons name="send" size={24} color="#fff" />
+                <MaterialIcons name="stop" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
           ) : (
@@ -432,14 +535,10 @@ export default function ChatScreen() {
                   placeholder="Type a message..."
                   placeholderTextColor="#9BA1A6"
                   value={messageText}
-                  onChangeText={(text) => {
-                    setMessageText(text);
-                    // Don't auto-hide quick replies on text change - let user control via toggle
-                  }}
+                  onChangeText={setMessageText}
                   multiline
                   maxLength={4096}
                   onFocus={() => {
-                    // Show quick replies on focus if available
                     if (chatState.quickReplies.length > 0) {
                       setShowQuickReplies(true);
                     }
@@ -453,7 +552,11 @@ export default function ChatScreen() {
                 onPress={() => setShowQuickReplies(!showQuickReplies)}
                 style={styles.quickReplyBtn}
               >
-                <MaterialIcons name="flash-on" size={20} color="#089B21" />
+                <MaterialIcons
+                  name="flash-on"
+                  size={20}
+                  color={showQuickReplies ? '#089B21' : '#9BA1A6'}
+                />
               </TouchableOpacity>
 
               {/* Send or Record */}
@@ -503,57 +606,127 @@ export default function ChatScreen() {
             </View>
             <Text style={styles.attachLabel}>Document</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.attachOption} onPress={() => { setShowAttachMenu(false); setShowTemplates(true); }}>
+          <TouchableOpacity style={styles.attachOption} onPress={() => { setShowAttachMenu(false); setShowSavedVoices(true); }}>
             <View style={[styles.attachIconBg, { backgroundColor: '#6366F1' }]}>
-              <MaterialIcons name="article" size={22} color="#fff" />
+              <MaterialIcons name="graphic-eq" size={22} color="#fff" />
             </View>
-            <Text style={styles.attachLabel}>Template</Text>
+            <Text style={styles.attachLabel}>Voice Notes</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Template Picker Modal */}
-      <Modal visible={showTemplates} animationType="slide" transparent>
+      {/* Add Quick Reply Modal */}
+      <Modal visible={showAddQuickReply} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.addQuickReplySheet}>
+            <Text style={styles.addQuickReplyTitle}>Add Quick Reply</Text>
+            <TextInput
+              style={styles.addQuickReplyInput}
+              placeholder="Type your quick reply..."
+              placeholderTextColor="#9BA1A6"
+              value={newQuickReplyText}
+              onChangeText={setNewQuickReplyText}
+              maxLength={200}
+              multiline
+              autoFocus
+            />
+            <View style={styles.addQuickReplyActions}>
+              <TouchableOpacity
+                onPress={() => { setShowAddQuickReply(false); setNewQuickReplyText(''); }}
+                style={styles.addQuickReplyCancelBtn}
+              >
+                <Text style={styles.addQuickReplyCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAddQuickReply}
+                style={[styles.addQuickReplySaveBtn, !newQuickReplyText.trim() && { opacity: 0.5 }]}
+                disabled={!newQuickReplyText.trim()}
+              >
+                <Text style={styles.addQuickReplySaveText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Save Voice Message Name Modal */}
+      <Modal visible={isSavingVoice} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.addQuickReplySheet}>
+            <Text style={styles.addQuickReplyTitle}>Save Voice Message</Text>
+            <Text style={styles.saveVoiceSubtitle}>Give this recording a name so you can find it later.</Text>
+            <TextInput
+              style={styles.addQuickReplyInput}
+              placeholder="e.g. Greeting, Follow-up..."
+              placeholderTextColor="#9BA1A6"
+              value={savingVoiceName}
+              onChangeText={setSavingVoiceName}
+              maxLength={50}
+              autoFocus
+            />
+            <View style={styles.addQuickReplyActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsSavingVoice(false);
+                  setSavingVoiceName('');
+                  audioRecorderRef.current = null;
+                }}
+                style={styles.addQuickReplyCancelBtn}
+              >
+                <Text style={styles.addQuickReplyCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveVoiceMessage}
+                style={[styles.addQuickReplySaveBtn, !savingVoiceName.trim() && { opacity: 0.5 }]}
+                disabled={!savingVoiceName.trim()}
+              >
+                <Text style={styles.addQuickReplySaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Saved Voice Messages Modal */}
+      <Modal visible={showSavedVoices} animationType="slide" transparent>
         <View style={styles.templateOverlay}>
           <View style={[styles.templateSheet, { paddingBottom: insets.bottom }]}>
             <View style={styles.templateHeader}>
-              <Text style={styles.templateTitle}>Templates</Text>
-              <TouchableOpacity onPress={() => setShowTemplates(false)}>
+              <Text style={styles.templateTitle}>Saved Voice Notes</Text>
+              <TouchableOpacity onPress={() => setShowSavedVoices(false)}>
                 <MaterialIcons name="close" size={24} color="#1B1B23" />
               </TouchableOpacity>
             </View>
-            <View style={styles.templateSearchBar}>
-              <MaterialIcons name="search" size={18} color="#9BA1A6" />
-              <TextInput
-                style={styles.templateSearchInput}
-                placeholder="Search templates..."
-                placeholderTextColor="#9BA1A6"
-                value={templateSearch}
-                onChangeText={setTemplateSearch}
-              />
-            </View>
+            <Text style={styles.savedVoiceHint}>Tap to send, long press to delete</Text>
             <FlatList
-              data={filteredTemplates}
-              keyExtractor={(item) => item._uid}
+              data={chatState.savedVoiceMessages}
+              keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.templateItem}
-                  onPress={() => handleSendTemplate(item)}
+                  style={styles.savedVoiceItem}
+                  onPress={() => handleSendSavedVoice(item)}
+                  onLongPress={() => handleDeleteSavedVoice(item)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.templateItemIcon}>
-                    <MaterialIcons name="article" size={20} color="#089B21" />
+                  <View style={styles.savedVoiceIcon}>
+                    <MaterialIcons name="graphic-eq" size={20} color="#6366F1" />
                   </View>
-                  <View style={styles.templateItemInfo}>
-                    <Text style={styles.templateItemName}>{item.template_name}</Text>
-                    <Text style={styles.templateItemLang}>{item.language} • {item.category}</Text>
+                  <View style={styles.savedVoiceInfo}>
+                    <Text style={styles.savedVoiceName}>{item.name}</Text>
+                    <Text style={styles.savedVoiceDuration}>
+                      {formatDuration(item.duration)} • {new Date(item.createdAt).toLocaleDateString()}
+                    </Text>
                   </View>
                   <MaterialIcons name="send" size={18} color="#089B21" />
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
-                <View style={styles.centerContainer}>
-                  <Text style={styles.emptyText}>No templates found</Text>
+                <View style={styles.savedVoiceEmpty}>
+                  <MaterialIcons name="graphic-eq" size={48} color="#E5E7EB" />
+                  <Text style={styles.emptyText}>No saved voice notes</Text>
+                  <Text style={styles.savedVoiceEmptyHint}>
+                    Record a voice message and choose "Save for Later" to add it here.
+                  </Text>
                 </View>
               }
             />
@@ -628,19 +801,44 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
+  // Quick Replies
   quickRepliesContainer: {
     backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderTopWidth: 0.5,
     borderTopColor: '#E5E7EB',
+  },
+  quickRepliesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  quickRepliesTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#687076',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addQuickReplyBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#089B21',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickRepliesScroll: {
+    paddingRight: 8,
   },
   quickReplyChip: {
     backgroundColor: '#F0F9F0',
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    marginHorizontal: 4,
+    marginRight: 8,
     borderWidth: 1,
     borderColor: '#089B21',
     maxWidth: 200,
@@ -656,6 +854,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 4,
   },
+  // Input Area
   inputArea: {
     backgroundColor: '#fff',
     paddingHorizontal: 8,
@@ -710,6 +909,7 @@ const styles = StyleSheet.create({
     padding: 8,
     marginBottom: 2,
   },
+  // Recording
   recordingBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -743,6 +943,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Attachment Menu
   attachMenu: {
     position: 'absolute',
     left: 12,
@@ -774,6 +975,69 @@ const styles = StyleSheet.create({
     color: '#687076',
     fontWeight: '500',
   },
+  // Modals
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  addQuickReplySheet: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 340,
+  },
+  addQuickReplyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1B1B23',
+    marginBottom: 12,
+  },
+  saveVoiceSubtitle: {
+    fontSize: 13,
+    color: '#687076',
+    marginBottom: 12,
+  },
+  addQuickReplyInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#1B1B23',
+    minHeight: 44,
+    maxHeight: 100,
+    marginBottom: 16,
+  },
+  addQuickReplyActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  addQuickReplyCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  addQuickReplyCancelText: {
+    fontSize: 15,
+    color: '#687076',
+    fontWeight: '500',
+  },
+  addQuickReplySaveBtn: {
+    backgroundColor: '#089B21',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addQuickReplySaveText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // Saved Voice Messages Modal
   templateOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -791,58 +1055,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 4,
   },
   templateTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1B1B23',
   },
-  templateSearchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    marginHorizontal: 16,
-    paddingHorizontal: 12,
-    height: 40,
-    gap: 8,
-    marginBottom: 8,
+  savedVoiceHint: {
+    fontSize: 12,
+    color: '#9BA1A6',
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  templateSearchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1B1B23',
-  },
-  templateItem: {
+  savedVoiceItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: '#E5E7EB',
     gap: 12,
   },
-  templateItemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(8,155,33,0.1)',
+  savedVoiceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(99,102,241,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  templateItemInfo: {
+  savedVoiceInfo: {
     flex: 1,
   },
-  templateItemName: {
-    fontSize: 14,
+  savedVoiceName: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#1B1B23',
   },
-  templateItemLang: {
+  savedVoiceDuration: {
     fontSize: 12,
     color: '#9BA1A6',
     marginTop: 2,
+  },
+  savedVoiceEmpty: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  savedVoiceEmptyHint: {
+    fontSize: 13,
+    color: '#9BA1A6',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    lineHeight: 18,
   },
   emptyText: {
     color: '#9BA1A6',

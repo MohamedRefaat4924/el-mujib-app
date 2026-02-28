@@ -54,6 +54,7 @@ function parseMessageFromApi(value: any): ChatMessage {
 
 const MESSAGE_CACHE_PREFIX = '@el_mujib_messages_';
 const QUICK_REPLIES_KEY = '@el_mujib_quick_replies';
+const SAVED_VOICES_KEY = '@el_mujib_saved_voices';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -64,6 +65,7 @@ interface ChatState {
   currentPage: number;
   templates: WhatsAppTemplate[];
   quickReplies: string[];
+  savedVoiceMessages: SavedVoiceMessage[];
   currentContactUid: string;
 }
 
@@ -78,6 +80,7 @@ type ChatAction =
   | { type: 'RESET_CHAT' }
   | { type: 'SET_TEMPLATES'; payload: WhatsAppTemplate[] }
   | { type: 'SET_QUICK_REPLIES'; payload: string[] }
+  | { type: 'SET_SAVED_VOICES'; payload: SavedVoiceMessage[] }
   | { type: 'SET_CONTACT_UID'; payload: string }
   | { type: 'UPDATE_MESSAGE_STATUS'; payload: { messageUid: string; status: string } };
 
@@ -90,6 +93,7 @@ const initialState: ChatState = {
   currentPage: 1,
   templates: [],
   quickReplies: [],
+  savedVoiceMessages: [],
   currentContactUid: '',
 };
 
@@ -130,11 +134,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'INCREMENT_PAGE':
       return { ...state, currentPage: state.currentPage + 1 };
     case 'RESET_CHAT':
-      return { ...initialState, templates: state.templates, quickReplies: state.quickReplies };
+      return { ...initialState, templates: state.templates, quickReplies: state.quickReplies, savedVoiceMessages: state.savedVoiceMessages };
     case 'SET_TEMPLATES':
       return { ...state, templates: action.payload };
     case 'SET_QUICK_REPLIES':
       return { ...state, quickReplies: action.payload };
+    case 'SET_SAVED_VOICES':
+      return { ...state, savedVoiceMessages: action.payload };
     case 'SET_CONTACT_UID':
       return { ...state, currentContactUid: action.payload };
     case 'UPDATE_MESSAGE_STATUS': {
@@ -149,6 +155,14 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
+export interface SavedVoiceMessage {
+  id: string;
+  name: string;
+  uri: string;
+  duration: number; // seconds
+  createdAt: number;
+}
+
 interface ChatContextType {
   state: ChatState;
   fetchMessages: (vendorUid: string, contactUid: string, options?: { isRefresh?: boolean }) => Promise<void>;
@@ -161,6 +175,10 @@ interface ChatContextType {
   saveCachedMessages: (contactUid: string) => Promise<void>;
   loadQuickReplies: () => Promise<void>;
   addQuickReply: (reply: string) => Promise<void>;
+  removeQuickReply: (reply: string) => Promise<void>;
+  loadSavedVoiceMessages: () => Promise<void>;
+  addSavedVoiceMessage: (voice: SavedVoiceMessage) => Promise<void>;
+  removeSavedVoiceMessage: (id: string) => Promise<void>;
   setContactUid: (uid: string) => void;
 }
 
@@ -262,8 +280,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         contact_uid: contactUid,
         message_body: message,
       });
-      // Add to quick replies for smart suggestions
-      addQuickReply(message);
+      // Quick replies are now user-managed, not auto-added
     } catch (e) {
       console.error('Error sending message:', e);
     } finally {
@@ -431,17 +448,66 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addQuickReply = useCallback(async (reply: string) => {
-    if (!reply.trim() || reply.length > 100) return;
+    if (!reply.trim() || reply.length > 200) return;
     try {
       const stored = await AsyncStorage.getItem(QUICK_REPLIES_KEY);
       let replies: string[] = stored ? JSON.parse(stored) : [];
-      replies = replies.filter(r => r !== reply);
-      replies.unshift(reply);
-      replies = replies.slice(0, 20);
+      // Don't add duplicates
+      if (replies.includes(reply.trim())) return;
+      replies.push(reply.trim());
+      replies = replies.slice(0, 50); // Max 50 quick replies
       await AsyncStorage.setItem(QUICK_REPLIES_KEY, JSON.stringify(replies));
       dispatch({ type: 'SET_QUICK_REPLIES', payload: replies });
     } catch (e) {
       console.error('Error adding quick reply:', e);
+    }
+  }, []);
+
+  const removeQuickReply = useCallback(async (reply: string) => {
+    try {
+      const stored = await AsyncStorage.getItem(QUICK_REPLIES_KEY);
+      let replies: string[] = stored ? JSON.parse(stored) : [];
+      replies = replies.filter(r => r !== reply);
+      await AsyncStorage.setItem(QUICK_REPLIES_KEY, JSON.stringify(replies));
+      dispatch({ type: 'SET_QUICK_REPLIES', payload: replies });
+    } catch (e) {
+      console.error('Error removing quick reply:', e);
+    }
+  }, []);
+
+  const loadSavedVoiceMessages = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(SAVED_VOICES_KEY);
+      if (stored) {
+        dispatch({ type: 'SET_SAVED_VOICES', payload: JSON.parse(stored) });
+      }
+    } catch (e) {
+      console.error('Error loading saved voice messages:', e);
+    }
+  }, []);
+
+  const addSavedVoiceMessage = useCallback(async (voice: SavedVoiceMessage) => {
+    try {
+      const stored = await AsyncStorage.getItem(SAVED_VOICES_KEY);
+      let voices: SavedVoiceMessage[] = stored ? JSON.parse(stored) : [];
+      voices.unshift(voice);
+      voices = voices.slice(0, 30); // Max 30 saved voice messages
+      await AsyncStorage.setItem(SAVED_VOICES_KEY, JSON.stringify(voices));
+      dispatch({ type: 'SET_SAVED_VOICES', payload: voices });
+    } catch (e) {
+      console.error('Error saving voice message:', e);
+    }
+  }, []);
+
+  const removeSavedVoiceMessage = useCallback(async (id: string) => {
+    try {
+      const stored = await AsyncStorage.getItem(SAVED_VOICES_KEY);
+      let voices: SavedVoiceMessage[] = stored ? JSON.parse(stored) : [];
+      voices = voices.filter(v => v.id !== id);
+      await AsyncStorage.setItem(SAVED_VOICES_KEY, JSON.stringify(voices));
+      dispatch({ type: 'SET_SAVED_VOICES', payload: voices });
+    } catch (e) {
+      console.error('Error removing saved voice message:', e);
     }
   }, []);
 
@@ -463,6 +529,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         saveCachedMessages,
         loadQuickReplies,
         addQuickReply,
+        removeQuickReply,
+        loadSavedVoiceMessages,
+        addSavedVoiceMessage,
+        removeSavedVoiceMessage,
         setContactUid,
       }}
     >

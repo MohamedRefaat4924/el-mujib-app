@@ -314,6 +314,27 @@ export async function uploadFile(
     const headers = await getMultipartHeaders();
     const formData = new FormData();
 
+    // Sanitize audio MIME types - server only accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+    let sanitizedMimeType = mimeType;
+    if (uploadUrl.includes('whatsapp_audio')) {
+      const acceptedAudioTypes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+      if (!acceptedAudioTypes.includes(mimeType)) {
+        // Map common unsupported types to accepted ones
+        const mimeMap: Record<string, string> = {
+          'audio/m4a': 'audio/mp4',
+          'audio/x-m4a': 'audio/mp4',
+          'audio/mp4a-latm': 'audio/mp4',
+          'audio/wav': 'audio/ogg',
+          'audio/x-wav': 'audio/ogg',
+          'audio/webm': 'audio/ogg',
+          'audio/3gpp': 'audio/amr',
+          'audio/3gpp2': 'audio/amr',
+        };
+        sanitizedMimeType = mimeMap[mimeType] || 'audio/mp4';
+        console.log(`[Upload] Sanitized audio MIME type: ${mimeType} → ${sanitizedMimeType}`);
+      }
+    }
+
     // Add additional input data fields (Flutter: request.fields.addAll(inputData))
     if (options?.inputData) {
       Object.entries(options.inputData).forEach(([key, value]) => {
@@ -328,18 +349,18 @@ export async function uploadFile(
       const response = await fetch(fileUri);
       const blob = await response.blob();
       // Create a File object with proper name and type for web
-      const file = new File([blob], fileName, { type: mimeType });
+      const file = new File([blob], fileName, { type: sanitizedMimeType });
       formData.append('filepond', file);
     } else {
       // For React Native, we pass an object with uri, type, name
       formData.append('filepond', {
         uri: fileUri,
-        type: mimeType,
+        type: sanitizedMimeType,
         name: fileName,
       } as any);
     }
 
-    console.log(`[Upload] Uploading to ${apiUrl}${uploadUrl} file=${fileName} type=${mimeType}`);
+    console.log(`[Upload] Uploading to ${apiUrl}${uploadUrl} file=${fileName} type=${sanitizedMimeType}`);
 
     const response = await fetch(`${apiUrl}${uploadUrl}`, {
       method: 'POST',
