@@ -189,7 +189,7 @@ export default function ContactsScreen() {
   if (authState.isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#089B21" />
+        <ActivityIndicator size="large" color="#1A6B3C" />
       </View>
     );
   }
@@ -302,7 +302,7 @@ export default function ContactsScreen() {
       {/* Contact List */}
       {contactsState.isLoading && contactsState.contactsList.length === 0 ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#089B21" />
+          <ActivityIndicator size="large" color="#1A6B3C" />
           <Text style={styles.loadingText}>Loading contacts...</Text>
         </View>
       ) : contactsState.contactsList.length === 0 ? (
@@ -324,8 +324,8 @@ export default function ContactsScreen() {
             <RefreshControl
               refreshing={contactsState.isLoading && contactsState.contactsList.length > 0}
               onRefresh={handleRefresh}
-              colors={['#089B21']}
-              tintColor="#089B21"
+              colors={['#1A6B3C']}
+              tintColor="#1A6B3C"
             />
           }
           onEndReached={handleLoadMore}
@@ -333,7 +333,7 @@ export default function ContactsScreen() {
           ListFooterComponent={
             contactsState.isLoadingMore ? (
               <View style={styles.footerLoader}>
-                <ActivityIndicator size="small" color="#089B21" />
+                <ActivityIndicator size="small" color="#1A6B3C" />
               </View>
             ) : null
           }
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   header: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tabsContainer: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     paddingBottom: 8,
   },
   tab: {
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   tabBadgeText: {
-    color: '#089B21',
+    color: '#1A6B3C',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -563,11 +563,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    shadowColor: '#089B21',
+    shadowColor: '#1A6B3C',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   unreadBadge: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     borderRadius: 10,
     minWidth: 20,
     height: 20,

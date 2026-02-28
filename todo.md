@@ -72,8 +72,11 @@
 - [x] Profile: Add update notes field (text input for contact notes) - fixed API endpoints to match Flutter, notes from __data.contact_notes
 - [x] Add inline audio waveform player in chat bubbles for voice messages (InlineAudioPlayer component with play/pause, progress waveform, duration display)
 - [x] Fix audio upload 406 by converting recording to raw AAC format before upload (expo-audio useAudioRecorder with aac_adts preset, .aac extension, audio/aac MIME)
-- [x] Bug: Audio upload rejected - server only accepts audio/mp4, audio/mpeg, audio/amr, audio/ogg (NOT audio/aac) - fixed MIME sanitization to map audio/aac → audio/ogg
+- [x] Bug: Audio upload rejected - reverted MIME sanitization to match Flutter exactly (send audio/aac as-is, server does accept it)
 - [x] Change Android package name to com.elmujib.direct for Google Play Store
 - [x] Configure signing keystore (upload-keystore.jks) for AAB build
 - [x] Guide user to build AAB via Publish button
 - [x] Update app version to 7.5.0 (versionCode 14) - higher than current Play Store release 7.4.0 (code 13)
+- [x] Fix voice upload: reverted MIME sanitization to match Flutter exactly - audio/aac sent as-is (Flutter data_transport.dart confirms server accepts it)
+- [x] Review Flutter saved audio send flow and replicate exactly (cycle: prepare-send-media → upload-temp-media → send-media)
+- [x] Redesign UI with fresh modern colors (#1A6B3C deep forest green), new audio player (progress bar + thumb + solid play button), updated bubbles (#E8F5E2 outgoing)

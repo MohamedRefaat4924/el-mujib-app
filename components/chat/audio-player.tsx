@@ -87,7 +87,7 @@ export function InlineAudioPlayer({ mediaUrl, messageId, isOutgoing }: InlineAud
       } catch (e) {
         // Player might be released
       }
-    }, 250);
+    }, 200);
   }, [messageId]);
 
   const handlePlayPause = useCallback(async () => {
@@ -161,65 +161,81 @@ export function InlineAudioPlayer({ mediaUrl, messageId, isOutgoing }: InlineAud
   };
 
   const progress = duration > 0 ? (currentTime / duration) : 0;
-  const accentColor = isOutgoing ? '#089B21' : '#555';
-  const barBgColor = isOutgoing ? 'rgba(8,155,33,0.2)' : 'rgba(0,0,0,0.1)';
-  const barFillColor = isOutgoing ? '#089B21' : '#687076';
+
+  // Fresh modern color scheme - different from Flutter's WhatsApp-green look
+  const playBtnBg = isOutgoing ? '#1A6B3C' : '#4A6CF7';
+  const barFilledColor = isOutgoing ? '#1A6B3C' : '#4A6CF7';
+  const barEmptyColor = isOutgoing ? 'rgba(26,107,60,0.2)' : 'rgba(74,108,247,0.15)';
+  const timeColor = isOutgoing ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.4)';
 
   return (
     <View style={styles.container}>
-      {/* Play/Pause Button */}
+      {/* Play/Pause Button - circular with solid background */}
       <TouchableOpacity
-        style={styles.playBtn}
+        style={[styles.playBtn, { backgroundColor: playBtnBg }]}
         onPress={handlePlayPause}
         activeOpacity={0.7}
       >
         {isLoading ? (
-          <View style={[styles.loadingCircle, { borderColor: accentColor }]} />
+          <View style={styles.loadingDots}>
+            <View style={[styles.dot, { backgroundColor: '#fff' }]} />
+            <View style={[styles.dot, { backgroundColor: 'rgba(255,255,255,0.6)' }]} />
+            <View style={[styles.dot, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
+          </View>
         ) : (
           <MaterialIcons
-            name={isPlaying ? 'pause-circle-filled' : 'play-circle-fill'}
-            size={40}
-            color={accentColor}
+            name={isPlaying ? 'pause' : 'play-arrow'}
+            size={22}
+            color="#FFFFFF"
           />
         )}
       </TouchableOpacity>
 
-      {/* Progress Bar and Time */}
+      {/* Progress Area */}
       <View style={styles.progressArea}>
-        {/* Waveform-style progress bar */}
-        <View style={styles.waveformContainer}>
-          {Array.from({ length: 30 }).map((_, i) => {
-            const barProgress = i / 30;
-            const isFilled = barProgress <= progress;
-            // Generate pseudo-random heights based on index (deterministic)
-            const seed = ((i * 7 + 3) * 13) % 17;
-            const height = 4 + (seed / 17) * 16;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.waveBar,
-                  {
-                    height,
-                    backgroundColor: isFilled ? barFillColor : barBgColor,
-                  },
-                ]}
-              />
-            );
-          })}
+        {/* Smooth rounded progress bar */}
+        <View style={[styles.progressTrack, { backgroundColor: barEmptyColor }]}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                backgroundColor: barFilledColor,
+                width: `${Math.min(progress * 100, 100)}%`,
+              },
+            ]}
+          />
+          {/* Thumb indicator */}
+          {(isPlaying || currentTime > 0) && (
+            <View
+              style={[
+                styles.progressThumb,
+                {
+                  backgroundColor: barFilledColor,
+                  left: `${Math.min(progress * 100, 100)}%`,
+                },
+              ]}
+            />
+          )}
         </View>
 
         {/* Time display */}
         <View style={styles.timeRow}>
-          <Text style={[styles.timeText, { color: isOutgoing ? '#687076' : '#9BA1A6' }]}>
-            {isPlaying || currentTime > 0 ? formatTime(currentTime) : (duration > 0 ? formatTime(duration) : '0:00')}
+          <Text style={[styles.timeText, { color: timeColor }]}>
+            {isPlaying || currentTime > 0 ? formatTime(currentTime) : '0:00'}
           </Text>
-          {duration > 0 && (isPlaying || currentTime > 0) && (
-            <Text style={[styles.timeText, { color: isOutgoing ? '#687076' : '#9BA1A6' }]}>
-              {formatTime(duration)}
-            </Text>
-          )}
+          <Text style={[styles.timeText, { color: timeColor }]}>
+            {duration > 0 ? formatTime(duration) : '--:--'}
+          </Text>
         </View>
+      </View>
+
+      {/* Microphone icon */}
+      <View style={styles.micIcon}>
+        <MaterialIcons
+          name="mic"
+          size={16}
+          color={isOutgoing ? 'rgba(26,107,60,0.5)' : 'rgba(74,108,247,0.4)'}
+        />
       </View>
     </View>
   );
@@ -229,39 +245,68 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minWidth: 220,
-    paddingVertical: 2,
+    gap: 10,
+    minWidth: 230,
+    paddingVertical: 4,
   },
   playBtn: {
-    padding: 2,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  loadingCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 3,
-    borderTopColor: 'transparent',
+  loadingDots: {
+    flexDirection: 'row',
+    gap: 3,
+    alignItems: 'center',
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   progressArea: {
     flex: 1,
   },
-  waveformContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 1.5,
-    height: 24,
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'visible',
+    position: 'relative',
   },
-  waveBar: {
-    width: 3,
-    borderRadius: 1.5,
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressThumb: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginLeft: -6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 6,
   },
   timeText: {
     fontSize: 11,
+    fontWeight: '500',
+  },
+  micIcon: {
+    marginLeft: -2,
   },
 });

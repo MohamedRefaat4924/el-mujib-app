@@ -52,44 +52,40 @@ describe('AAC Recording Preset', () => {
   });
 });
 
-// Test the MIME type sanitization logic from api.ts
-describe('Audio MIME Type Sanitization', () => {
-  // Server only accepts these 4 types (audio/aac is NOT accepted!)
-  const acceptedAudioTypes = ['audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
-  
-  const mimeMap: Record<string, string> = {
-    'audio/aac': 'audio/ogg',
+// Test the MIME type handling matching Flutter's data_transport.dart exactly
+describe('Audio MIME Type Handling (Flutter-aligned)', () => {
+  // Flutter sends audio/aac as-is and the server accepts it.
+  // We only map truly unknown MIME types to sensible defaults.
+  const flutterMimeMap: Record<string, string> = {
     'audio/m4a': 'audio/mp4',
     'audio/x-m4a': 'audio/mp4',
     'audio/mp4a-latm': 'audio/mp4',
-    'audio/wav': 'audio/ogg',
-    'audio/x-wav': 'audio/ogg',
-    'audio/webm': 'audio/ogg',
+    'audio/x-wav': 'audio/wav',
     'audio/3gpp': 'audio/amr',
     'audio/3gpp2': 'audio/amr',
-    'audio/caf': 'audio/ogg',
-    'audio/x-caf': 'audio/ogg',
-    'application/octet-stream': 'audio/ogg',
+    'audio/caf': 'audio/aac',
+    'audio/x-caf': 'audio/aac',
+    'audio/webm': 'audio/ogg',
+    'application/octet-stream': 'audio/aac',
   };
 
   function sanitizeMimeType(mimeType: string): string {
-    if (acceptedAudioTypes.includes(mimeType)) return mimeType;
-    return mimeMap[mimeType] || 'audio/ogg';
+    return flutterMimeMap[mimeType] || mimeType;
   }
 
-  it('should map audio/aac to audio/ogg (server rejects audio/aac)', () => {
-    expect(sanitizeMimeType('audio/aac')).toBe('audio/ogg');
+  it('should NOT remap audio/aac - send as-is like Flutter does', () => {
+    expect(sanitizeMimeType('audio/aac')).toBe('audio/aac');
   });
 
-  it('should pass through accepted audio/mp4', () => {
+  it('should pass through audio/mp4 unchanged', () => {
     expect(sanitizeMimeType('audio/mp4')).toBe('audio/mp4');
   });
 
-  it('should pass through accepted audio/mpeg', () => {
+  it('should pass through audio/mpeg unchanged', () => {
     expect(sanitizeMimeType('audio/mpeg')).toBe('audio/mpeg');
   });
 
-  it('should pass through accepted audio/ogg', () => {
+  it('should pass through audio/ogg unchanged', () => {
     expect(sanitizeMimeType('audio/ogg')).toBe('audio/ogg');
   });
 
@@ -101,65 +97,16 @@ describe('Audio MIME Type Sanitization', () => {
     expect(sanitizeMimeType('audio/webm')).toBe('audio/ogg');
   });
 
-  it('should map application/octet-stream to audio/ogg', () => {
-    expect(sanitizeMimeType('application/octet-stream')).toBe('audio/ogg');
+  it('should map application/octet-stream to audio/aac', () => {
+    expect(sanitizeMimeType('application/octet-stream')).toBe('audio/aac');
   });
 
-  it('should default unknown types to audio/ogg', () => {
-    expect(sanitizeMimeType('audio/unknown')).toBe('audio/ogg');
-    expect(sanitizeMimeType('video/mp4')).toBe('audio/ogg');
-  });
-});
-
-// Test file extension correction logic
-describe('Audio File Extension Correction', () => {
-  const mimeToExt: Record<string, string> = {
-    'audio/aac': '.aac',
-    'audio/mp4': '.m4a',
-    'audio/mpeg': '.mp3',
-    'audio/amr': '.amr',
-    'audio/ogg': '.ogg',
-  };
-
-  function correctExtension(fileName: string, mimeType: string): string {
-    const expectedExt = mimeToExt[mimeType];
-    if (!expectedExt) return fileName;
-    
-    const validExts: Record<string, string[]> = {
-      'audio/mp4': ['.m4a', '.mp4'],
-    };
-    const validExtList = validExts[mimeType] || [expectedExt];
-    const currentExt = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
-    
-    if (!validExtList.includes(currentExt)) {
-      const dotIdx = fileName.lastIndexOf('.');
-      return (dotIdx > 0 ? fileName.substring(0, dotIdx) : fileName) + expectedExt;
-    }
-    return fileName;
-  }
-
-  it('should keep .aac extension for audio/aac', () => {
-    expect(correctExtension('voice.aac', 'audio/aac')).toBe('voice.aac');
+  it('should map audio/caf to audio/aac', () => {
+    expect(sanitizeMimeType('audio/caf')).toBe('audio/aac');
   });
 
-  it('should correct .m4a to .aac for audio/aac', () => {
-    expect(correctExtension('voice.m4a', 'audio/aac')).toBe('voice.aac');
-  });
-
-  it('should keep .m4a extension for audio/mp4', () => {
-    expect(correctExtension('voice.m4a', 'audio/mp4')).toBe('voice.m4a');
-  });
-
-  it('should keep .mp4 extension for audio/mp4', () => {
-    expect(correctExtension('voice.mp4', 'audio/mp4')).toBe('voice.mp4');
-  });
-
-  it('should correct .wav to .ogg for audio/ogg', () => {
-    expect(correctExtension('voice.wav', 'audio/ogg')).toBe('voice.ogg');
-  });
-
-  it('should add extension if missing', () => {
-    expect(correctExtension('voice', 'audio/aac')).toBe('voice.aac');
+  it('should pass through unknown types unchanged (no forced default)', () => {
+    expect(sanitizeMimeType('audio/unknown')).toBe('audio/unknown');
   });
 });
 
@@ -167,7 +114,7 @@ describe('Audio File Extension Correction', () => {
 describe('Voice Recording Upload Parameters', () => {
   it('should send audio/aac MIME type for voice recordings', () => {
     // When recording with AAC_RECORDING_PRESET (.aac extension, aac_adts format)
-    // The upload should use audio/aac MIME type
+    // The upload should use audio/aac MIME type - matching Flutter exactly
     const mimeType = 'audio/aac';
     const fileName = `voice_${Date.now()}.aac`;
     

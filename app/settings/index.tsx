@@ -68,7 +68,7 @@ export default function SettingsScreen() {
           onPress={() => (router as any).push('/profile')}
           activeOpacity={0.7}
         >
-          <View style={[styles.menuIconBg, { backgroundColor: '#089B21' }]}>
+          <View style={[styles.menuIconBg, { backgroundColor: '#1A6B3C' }]}>
             <MaterialIcons name="person" size={20} color="#fff" />
           </View>
           <Text style={styles.menuItemText}>My Profile</Text>
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
   },
   header: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -148,10 +148,10 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#089B21',
+    shadowColor: '#1A6B3C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

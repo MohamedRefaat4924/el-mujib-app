@@ -449,7 +449,7 @@ export default function ChatScreen() {
       <View style={styles.messagesContainer}>
         {chatState.isLoading && chatState.messages.length === 0 ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#089B21" />
+            <ActivityIndicator size="large" color="#1A6B3C" />
           </View>
         ) : (
           <FlatList
@@ -468,7 +468,7 @@ export default function ChatScreen() {
             ListFooterComponent={
               chatState.isLoadingMore ? (
                 <View style={styles.loadingMore}>
-                  <ActivityIndicator size="small" color="#089B21" />
+                  <ActivityIndicator size="small" color="#1A6B3C" />
                 </View>
               ) : null
             }
@@ -576,7 +576,7 @@ export default function ChatScreen() {
                 <MaterialIcons
                   name="flash-on"
                   size={20}
-                  color={showQuickReplies ? '#089B21' : '#9BA1A6'}
+                  color={showQuickReplies ? '#1A6B3C' : '#9BA1A6'}
                 />
               </TouchableOpacity>
 
@@ -598,7 +598,7 @@ export default function ChatScreen() {
                   onPress={handleStartRecording}
                   style={styles.micButton}
                 >
-                  <MaterialIcons name="mic" size={24} color="#089B21" />
+                  <MaterialIcons name="mic" size={22} color="#1A6B3C" />
                 </TouchableOpacity>
               )}
             </View>
@@ -616,7 +616,7 @@ export default function ChatScreen() {
             <Text style={styles.attachLabel}>Camera</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachOption} onPress={handleSendImage}>
-            <View style={[styles.attachIconBg, { backgroundColor: '#089B21' }]}>
+            <View style={[styles.attachIconBg, { backgroundColor: '#1A6B3C' }]}>
               <MaterialIcons name="photo-library" size={22} color="#fff" />
             </View>
             <Text style={styles.attachLabel}>Gallery</Text>
@@ -738,7 +738,7 @@ export default function ChatScreen() {
                       {formatDuration(item.duration)} • {new Date(item.createdAt).toLocaleDateString()}
                     </Text>
                   </View>
-                  <MaterialIcons name="send" size={18} color="#089B21" />
+                  <MaterialIcons name="send" size={18} color="#1A6B3C" />
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
@@ -761,7 +761,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ECE5DD',
+    backgroundColor: '#F0EDE8',
   },
   centerContainer: {
     flex: 1,
@@ -769,28 +769,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    gap: 10,
+    shadowColor: '#1A6B3C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
   backButton: {
     padding: 4,
   },
   headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerAvatarText: {
     color: '#fff',
@@ -844,10 +846,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   addQuickReplyBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#089B21',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -855,17 +857,17 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   quickReplyChip: {
-    backgroundColor: '#F0F9F0',
-    borderRadius: 16,
+    backgroundColor: '#EFF8F0',
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 8,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#089B21',
+    borderColor: '#1A6B3C',
     maxWidth: 200,
   },
   quickReplyText: {
-    color: '#089B21',
+    color: '#1A6B3C',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -894,9 +896,9 @@ const styles = StyleSheet.create({
   },
   textInputContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 20,
-    paddingHorizontal: 14,
+    backgroundColor: '#F8F8F6',
+    borderRadius: 22,
+    paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 10 : 4,
     minHeight: 40,
     maxHeight: 120,
@@ -913,21 +915,26 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#089B21',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
-    shadowColor: '#089B21',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#1A6B3C',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
   },
   micButton: {
-    padding: 8,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(26,107,60,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 2,
   },
   // Recording
@@ -960,9 +967,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#1A6B3C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   // Attachment Menu
   attachMenu: {
@@ -1048,10 +1060,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   addQuickReplySaveBtn: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   addQuickReplySaveText: {
     fontSize: 15,

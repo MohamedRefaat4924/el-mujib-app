@@ -89,7 +89,7 @@ export default function ProfileScreen() {
 
       {isLoading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#089B21" />
+          <ActivityIndicator size="large" color="#1A6B3C" />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -233,11 +233,11 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-    shadowColor: '#089B21',
+    shadowColor: '#1A6B3C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -294,11 +294,11 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   saveButton: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    shadowColor: '#089B21',
+    shadowColor: '#1A6B3C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

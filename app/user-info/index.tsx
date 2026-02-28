@@ -227,7 +227,7 @@ export default function UserInfoScreen() {
           <Text style={styles.headerTitle}>User Information</Text>
         </View>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#089B21" />
+          <ActivityIndicator size="large" color="#1A6B3C" />
         </View>
       </View>
     );
@@ -304,7 +304,7 @@ export default function UserInfoScreen() {
               </View>
             </View>
             <View style={styles.saveRow}>
-              {isSavingAssign && <ActivityIndicator size="small" color="#089B21" />}
+              {isSavingAssign && <ActivityIndicator size="small" color="#1A6B3C" />}
             </View>
           </View>
 
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   profileBanner: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     paddingTop: 40,
     paddingBottom: 20,
     alignItems: 'center',
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -599,8 +599,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   chipActive: {
-    backgroundColor: '#089B21',
-    borderColor: '#089B21',
+    backgroundColor: '#1A6B3C',
+    borderColor: '#1A6B3C',
   },
   chipText: {
     fontSize: 13,
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
 
   // Action button (save labels)
   actionButton: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     borderRadius: 6,
     paddingVertical: 10,
     alignItems: 'center',
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   updateButton: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     borderRadius: 6,
     paddingVertical: 12,
     alignItems: 'center',

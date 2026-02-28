@@ -150,11 +150,11 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
   },
   gradientBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
   },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -235,13 +235,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   loginButton: {
-    backgroundColor: '#089B21',
+    backgroundColor: '#1A6B3C',
     borderRadius: 12,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#089B21',
+    shadowColor: '#1A6B3C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

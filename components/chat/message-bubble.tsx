@@ -267,9 +267,9 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
                 activeOpacity={0.7}
               >
                 {btn.url ? (
-                  <MaterialIcons name="open-in-new" size={14} color="#089B21" style={{ marginRight: 4 }} />
+                  <MaterialIcons name="open-in-new" size={14} color="#1A6B3C" style={{ marginRight: 4 }} />
                 ) : (
-                  <MaterialIcons name="reply" size={14} color="#089B21" style={{ marginRight: 4 }} />
+                  <MaterialIcons name="reply" size={14} color="#1A6B3C" style={{ marginRight: 4 }} />
                 )}
                 <Text style={styles.interactiveButtonText}>{btn.text}</Text>
               </TouchableOpacity>
@@ -393,7 +393,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
         activeOpacity={0.7}
       >
         <View style={styles.documentIcon}>
-          <MaterialIcons name="description" size={28} color="#089B21" />
+          <MaterialIcons name="description" size={28} color="#1A6B3C" />
         </View>
         <View style={styles.documentInfo}>
           <Text style={[styles.documentName, isOutgoing && styles.outgoingText]} numberOfLines={2}>
@@ -403,7 +403,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
             {message.__data?.mime_type || 'Document'}
           </Text>
         </View>
-        <MaterialIcons name="download" size={22} color="#089B21" />
+        <MaterialIcons name="download" size={22} color="#1A6B3C" />
       </TouchableOpacity>
     );
   };
@@ -430,7 +430,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
       <View>
         {contacts.map((contact: any, idx: number) => (
           <View key={idx} style={styles.contactCard}>
-            <MaterialIcons name="person" size={24} color="#089B21" />
+            <MaterialIcons name="person" size={24} color="#1A6B3C" />
             <View style={styles.contactCardInfo}>
               <Text style={[styles.contactCardName, isOutgoing && styles.outgoingText]}>
                 {contact.name?.formatted_name || contact.name?.first_name || 'Unknown'}
@@ -486,7 +486,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
     if (interactiveData.button_reply) {
       return (
         <View style={styles.interactiveReply}>
-          <MaterialIcons name="reply" size={16} color="#089B21" />
+          <MaterialIcons name="reply" size={16} color="#1A6B3C" />
           <Text style={[styles.messageText, isOutgoing && styles.outgoingText]}>
             {interactiveData.button_reply.title}
           </Text>
@@ -497,7 +497,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
     if (interactiveData.list_reply) {
       return (
         <View style={styles.interactiveReply}>
-          <MaterialIcons name="list" size={16} color="#089B21" />
+          <MaterialIcons name="list" size={16} color="#1A6B3C" />
           <Text style={[styles.messageText, isOutgoing && styles.outgoingText]}>
             {interactiveData.list_reply.title}
           </Text>
@@ -560,7 +560,7 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
         {/* List button */}
         {interactiveData.action?.button && (
           <TouchableOpacity style={styles.interactiveButton} activeOpacity={0.7}>
-            <MaterialIcons name="list" size={16} color="#089B21" />
+            <MaterialIcons name="list" size={16} color="#1A6B3C" />
             <Text style={styles.interactiveButtonText}>
               {interactiveData.action.button}
             </Text>
@@ -625,8 +625,8 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
                     }}
                     activeOpacity={0.7}
                   >
-                    {btn.type === 'URL' && <MaterialIcons name="open-in-new" size={14} color="#089B21" />}
-                    {btn.type === 'PHONE_NUMBER' && <MaterialIcons name="phone" size={14} color="#089B21" />}
+                    {btn.type === 'URL' && <MaterialIcons name="open-in-new" size={14} color="#1A6B3C" />}
+                    {btn.type === 'PHONE_NUMBER' && <MaterialIcons name="phone" size={14} color="#1A6B3C" />}
                     <Text style={styles.interactiveButtonText}>{btn.text}</Text>
                   </TouchableOpacity>
                 ))}
@@ -758,9 +758,11 @@ const styles = StyleSheet.create({
   incomingBubble: {
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.04)',
   },
   outgoingBubble: {
-    backgroundColor: '#DCF8C6',
+    backgroundColor: '#E8F5E2',
     borderBottomRightRadius: 4,
   },
   stickerBubble: {
@@ -842,7 +844,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: 'rgba(8,155,33,0.1)',
+    backgroundColor: 'rgba(26,107,60,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -892,7 +894,7 @@ const styles = StyleSheet.create({
   },
   locationLink: {
     fontSize: 12,
-    color: '#089B21',
+    color: '#1A6B3C',
     fontWeight: '600',
   },
   interactiveReply: {
@@ -940,7 +942,7 @@ const styles = StyleSheet.create({
   interactiveButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#089B21',
+    color: '#1A6B3C',
   },
   reactionContainer: {
     alignSelf: 'center',
