@@ -66,7 +66,9 @@
 - [x] Bug: Duplicate contacts in home page - fixed contactExists to check both key and _uid, fixed ADD_NEW_CONTACT and UPDATE_CONTACT_NEW_MESSAGE to prevent duplicates
 - [x] Bug: Audio upload 406 - switched to HIGH_QUALITY preset (.m4a/audio/mp4), fixed MIME sanitization mapping
 - [x] Bug: Real-time messages not working - reverted Pusher to original simple version, added 5s polling in chat screen, fixed stale closure refs in home page
-- [ ] Bug: Audio upload still 406 even with audio/mp4 MIME - server likely checking file content not just declared MIME type
+- [x] Bug: Audio upload still 406 even with audio/mp4 MIME - switched from expo-av to expo-audio with custom AAC preset (aac_adts output format on Android = raw AAC bitstream)
 - [x] Profile: Add assign team field (dropdown to assign team member) - fixed API endpoints to match Flutter
 - [x] Profile: Add assign label field (picker to assign label/tag) - fixed API endpoints to match Flutter
 - [x] Profile: Add update notes field (text input for contact notes) - fixed API endpoints to match Flutter, notes from __data.contact_notes
+- [x] Add inline audio waveform player in chat bubbles for voice messages (InlineAudioPlayer component with play/pause, progress waveform, duration display)
+- [x] Fix audio upload 406 by converting recording to raw AAC format before upload (expo-audio useAudioRecorder with aac_adts preset, .aac extension, audio/aac MIME)

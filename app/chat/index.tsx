@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,11 +19,45 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  IOSOutputFormat,
+  AudioQuality,
+} from 'expo-audio';
 import { useAuth } from '@/lib/stores/auth-store';
 import { useChat, SavedVoiceMessage } from '@/lib/stores/chat-store';
 import { useContacts } from '@/lib/stores/contacts-store';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { ChatMessage } from '@/lib/types';
+
+// Custom recording preset that produces raw AAC (.aac) files
+// On Android: uses 'aac_adts' output format which produces raw AAC bitstream (not in MP4 container)
+// On iOS: uses MPEG4AAC codec with .aac extension
+// This matches what Flutter's social_media_recorder produces and the server expects
+const AAC_RECORDING_PRESET = {
+  extension: '.aac',
+  sampleRate: 44100,
+  numberOfChannels: 1, // mono for voice messages
+  bitRate: 128000,
+  android: {
+    outputFormat: 'aac_adts' as const, // Raw AAC bitstream, NOT mpeg4 container
+    audioEncoder: 'aac' as const,
+  },
+  ios: {
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.HIGH,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 128000,
+  },
+};
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -63,13 +97,14 @@ export default function ChatScreen() {
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showAddQuickReply, setShowAddQuickReply] = useState(false);
   const [newQuickReplyText, setNewQuickReplyText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [savingVoiceName, setSavingVoiceName] = useState('');
   const flatListRef = useRef<FlatList>(null);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioRecorderRef = useRef<any>(null);
+  const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
+
+  // expo-audio recorder hook with custom AAC preset
+  const audioRecorder = useAudioRecorder(AAC_RECORDING_PRESET);
+  const recorderState = useAudioRecorderState(audioRecorder, 500);
 
   const contactUid = params.contactUid || '';
   const contactName = params.contactName || 'Unknown';
@@ -203,53 +238,38 @@ export default function ChatScreen() {
 
   const handleStartRecording = useCallback(async () => {
     try {
-      const { Audio } = await import('expo-av');
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         Alert.alert('Permission needed', 'Microphone permission is required to record audio.');
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      // Use HIGH_QUALITY preset which is well-tested across platforms
-      // HIGH_QUALITY on iOS: .m4a extension, MPEG4AAC format -> audio/mp4 (server accepts this)
-      // HIGH_QUALITY on Android: .m4a extension, MPEG_4 format with AAC encoder -> audio/mp4
-      // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
-      audioRecorderRef.current = recording;
-      setIsRecording(true);
-      setRecordingDuration(0);
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
+      // Prepare and start recording with custom AAC preset
+      // On Android: aac_adts output format produces raw AAC bitstream (.aac)
+      // On iOS: MPEG4AAC codec with .aac extension
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      console.log('[Recording] Started with AAC preset, extension: .aac');
     } catch (e) {
       console.error('Recording start error:', e);
       Alert.alert('Error', 'Could not start recording. Please check microphone permissions.');
     }
-  }, []);
+  }, [audioRecorder]);
 
   const handleStopRecording = useCallback(async () => {
-    if (!audioRecorderRef.current) return;
+    if (!recorderState.isRecording) return;
 
     try {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
+      const duration = Math.round(recorderState.durationMillis / 1000);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
 
-      const duration = recordingDuration;
-      await audioRecorderRef.current.stopAndUnloadAsync();
-      const uri = audioRecorderRef.current.getURI();
-      audioRecorderRef.current = null;
-      setIsRecording(false);
-      setRecordingDuration(0);
+      console.log('[Recording] Stopped. URI:', uri, 'Duration:', duration, 's');
 
       if (uri) {
         // Ask user: Send now or Save for later?
@@ -260,12 +280,12 @@ export default function ChatScreen() {
             {
               text: 'Send Now',
               onPress: async () => {
-                // Force audio/aac MIME type and .aac extension to match Flutter's upload exactly
-                // The server's whatsapp_audio endpoint may require audio/aac specifically
+                // Send as audio/aac with .aac extension - matches Flutter's upload format exactly
+                // The file IS raw AAC (aac_adts on Android) or AAC in .aac container (iOS)
                 await sendMediaMessage(contactUid, {
                   uri,
                   mimeType: 'audio/aac',
-                  fileName: 'voice_message.aac',
+                  fileName: `voice_${Date.now()}.aac`,
                 }, 'audio');
                 setTimeout(() => {
                   fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -277,8 +297,7 @@ export default function ChatScreen() {
               onPress: () => {
                 setIsSavingVoice(true);
                 setSavingVoiceName('');
-                // Store the uri temporarily
-                audioRecorderRef.current = { savedUri: uri, savedDuration: duration };
+                savedRecordingRef.current = { savedUri: uri, savedDuration: duration };
               },
             },
             { text: 'Discard', style: 'destructive' },
@@ -287,9 +306,8 @@ export default function ChatScreen() {
       }
     } catch (e) {
       console.error('Recording stop error:', e);
-      setIsRecording(false);
     }
-  }, [contactUid, vendorUid, recordingDuration, sendMediaMessage, fetchMessages]);
+  }, [audioRecorder, recorderState, contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
   const handleSaveVoiceMessage = useCallback(async () => {
     const name = savingVoiceName.trim();
@@ -297,38 +315,29 @@ export default function ChatScreen() {
       Alert.alert('Name required', 'Please enter a name for this voice message.');
       return;
     }
-    if (!audioRecorderRef.current?.savedUri) return;
+    if (!savedRecordingRef.current?.savedUri) return;
 
     const voice: SavedVoiceMessage = {
       id: `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name,
-      uri: audioRecorderRef.current.savedUri,
-      duration: audioRecorderRef.current.savedDuration || 0,
+      uri: savedRecordingRef.current.savedUri,
+      duration: savedRecordingRef.current.savedDuration || 0,
       createdAt: Date.now(),
     };
 
     await addSavedVoiceMessage(voice);
-    audioRecorderRef.current = null;
+    savedRecordingRef.current = null;
     setIsSavingVoice(false);
     setSavingVoiceName('');
   }, [savingVoiceName, addSavedVoiceMessage]);
 
   const handleCancelRecording = useCallback(async () => {
-    if (!audioRecorderRef.current) return;
     try {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      await audioRecorderRef.current.stopAndUnloadAsync();
-      audioRecorderRef.current = null;
-      setIsRecording(false);
-      setRecordingDuration(0);
+      await audioRecorder.stop();
     } catch (e) {
       console.error('Recording cancel error:', e);
-      setIsRecording(false);
     }
-  }, []);
+  }, [audioRecorder]);
 
   const handleSendSavedVoice = useCallback(async (voice: SavedVoiceMessage) => {
     setShowSavedVoices(false);
@@ -517,14 +526,14 @@ export default function ChatScreen() {
         keyboardVerticalOffset={0}
       >
         <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          {isRecording ? (
+          {recorderState.isRecording ? (
             <View style={styles.recordingBar}>
               <TouchableOpacity onPress={handleCancelRecording} style={styles.cancelRecordBtn}>
                 <MaterialIcons name="close" size={24} color="#F5365C" />
               </TouchableOpacity>
               <View style={styles.recordingIndicator}>
                 <View style={styles.recordingDot} />
-                <Text style={styles.recordingTime}>{formatDuration(recordingDuration)}</Text>
+                <Text style={styles.recordingTime}>{formatDuration(Math.round(recorderState.durationMillis / 1000))}</Text>
               </View>
               <TouchableOpacity onPress={handleStopRecording} style={styles.stopRecordBtn}>
                 <MaterialIcons name="stop" size={24} color="#fff" />
@@ -681,7 +690,7 @@ export default function ChatScreen() {
                 onPress={() => {
                   setIsSavingVoice(false);
                   setSavingVoiceName('');
-                  audioRecorderRef.current = null;
+                  savedRecordingRef.current = null;
                 }}
                 style={styles.addQuickReplyCancelBtn}
               >

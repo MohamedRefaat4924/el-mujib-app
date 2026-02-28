@@ -11,6 +11,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ChatMessage, MessageData, InteractiveMessageData, TemplateComponent } from '@/lib/types';
+import { InlineAudioPlayer } from './audio-player';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.78;
@@ -337,29 +338,20 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
 
   const renderAudioMessage = () => {
     const mediaUrl = message.__data?.media_url;
-    return (
-      <View style={styles.audioContainer}>
-        <TouchableOpacity
-          style={styles.audioPlayBtn}
-          onPress={() => mediaUrl && Linking.openURL(mediaUrl)}
-        >
-          <MaterialIcons name="play-circle-fill" size={36} color={isOutgoing ? '#089B21' : '#555'} />
-        </TouchableOpacity>
-        <View style={styles.audioWaveform}>
-          {Array.from({ length: 20 }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.audioBar,
-                {
-                  height: 4 + Math.random() * 16,
-                  backgroundColor: isOutgoing ? '#089B21' : '#9BA1A6',
-                },
-              ]}
-            />
-          ))}
+    if (!mediaUrl) {
+      return (
+        <View style={styles.audioContainer}>
+          <MaterialIcons name="audio-file" size={24} color="#9BA1A6" />
+          <Text style={styles.placeholderText}>Audio unavailable</Text>
         </View>
-      </View>
+      );
+    }
+    return (
+      <InlineAudioPlayer
+        mediaUrl={mediaUrl}
+        messageId={message._uid}
+        isOutgoing={isOutgoing}
+      />
     );
   };
 
