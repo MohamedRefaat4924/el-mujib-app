@@ -36,6 +36,7 @@ function parseMessageFromApi(value: any): ChatMessage {
     formatted_message: value?.message || value?.formatted_message || '',
     formatted_message_time: value?.formatted_message_time || '',
     whatsapp_message_error: value?.whatsapp_message_error || '',
+    template_message: value?.template_message || '',
     __data: {
       interaction_message_data: value?.__data?.interaction_message_data,
       template_message_data: value?.__data?.template_message_data,
@@ -271,9 +272,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Send media message matching Flutter's chatbox_controller.dart sendMediaN()
-  // Two-step process:
-  // 1. Upload file to media/upload-temp-media/whatsapp_{type} with field name 'filepond'
-  // 2. Send via vendor/whatsapp/contact/chat/send-media with uploaded data
+  // Three-step process matching Flutter exactly:
+  // 1. Call prepare-send-media/{type} (GET) to prepare the upload session
+  // 2. Upload file to media/upload-temp-media/whatsapp_{type} with field name 'filepond'
+  // 3. Send via vendor/whatsapp/contact/chat/send-media with uploaded data
   const sendMediaMessage = useCallback(async (
     contactUid: string,
     file: any,
@@ -282,9 +284,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   ) => {
     dispatch({ type: 'SET_SENDING', payload: true });
     try {
-      // Step 1: Determine upload path based on media type (matching Flutter's switch case)
+      // Normalize media type label (matching Flutter's getChatMedia normalization)
+      let normalizedLabel = mediaType.toLowerCase();
+      if (normalizedLabel === 'documento') normalizedLabel = 'document';
+      if (normalizedLabel === 'immagine') normalizedLabel = 'image';
+
+      // Step 1: Call prepare-send-media (matching Flutter's getChatMedia)
+      try {
+        await apiGet(`vendor/whatsapp/contact/chat/prepare-send-media/${normalizedLabel}`);
+      } catch (prepErr) {
+        console.warn('prepare-send-media warning (non-fatal):', prepErr);
+        // Continue even if this fails - it's a preparation step
+      }
+
+      // Step 2: Determine upload path based on media type (matching Flutter's switch case)
       let uploadPath = 'media/upload-temp-media/whatsapp_other';
-      switch (mediaType) {
+      switch (normalizedLabel) {
         case 'image':
           uploadPath = 'media/upload-temp-media/whatsapp_image';
           break;
@@ -300,10 +315,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
 
       const fileUri = file.uri || file;
-      const fileName = file.fileName || file.name || `file.${mediaType}`;
+      const fileName = file.fileName || file.name || `file.${normalizedLabel}`;
       const mimeType = file.mimeType || file.type || 'application/octet-stream';
 
-      // Step 1: Upload file using 'filepond' field name (matching Flutter data_transport.uploadFile)
+      // Step 2: Upload file using 'filepond' field name (matching Flutter data_transport.uploadFile)
       const uploadResponse = await uploadFile(
         fileUri,
         fileName,
@@ -317,7 +332,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const uploadedData = uploadResponse.data;
 
-      // Step 2: Send media message matching Flutter's sendMediaN payload exactly
+      // Step 3: Send media message matching Flutter's sendMediaN payload exactly
       // Flutter builds: { contact_uid, filepond: "undefined", uploaded_media_file_name, media_type, raw_upload_data, caption }
       const mediaData = {
         message: uploadedData?.message || 'File uploaded successfully.',
@@ -334,7 +349,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         contact_uid: contactUid,
         filepond: 'undefined',
         uploaded_media_file_name: uploadedData?.fileName || fileName,
-        media_type: mediaType,
+        media_type: normalizedLabel,
         raw_upload_data: JSON.stringify(mediaData),
         caption: caption || '',
       });

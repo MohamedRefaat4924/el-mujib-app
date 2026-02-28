@@ -369,20 +369,30 @@ export default function ChatScreen() {
       </View>
 
       {/* Quick Replies */}
-      {showQuickReplies && chatState.quickReplies.length > 0 && (
+      {showQuickReplies && (
         <View style={styles.quickRepliesContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {chatState.quickReplies.map((reply, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.quickReplyChip}
-                onPress={() => handleQuickReply(reply)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.quickReplyText} numberOfLines={1}>{reply}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          {chatState.quickReplies.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {chatState.quickReplies
+                .filter(reply => {
+                  // Filter quick replies based on current input text
+                  if (!messageText.trim()) return true;
+                  return reply.toLowerCase().includes(messageText.toLowerCase());
+                })
+                .map((reply, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.quickReplyChip}
+                    onPress={() => handleQuickReply(reply)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quickReplyText} numberOfLines={1}>{reply}</Text>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+          ) : (
+            <Text style={styles.quickReplyEmptyText}>No quick replies yet. Send messages to build your quick reply list.</Text>
+          )}
         </View>
       )}
 
@@ -424,12 +434,13 @@ export default function ChatScreen() {
                   value={messageText}
                   onChangeText={(text) => {
                     setMessageText(text);
-                    if (text.length === 0) setShowQuickReplies(false);
+                    // Don't auto-hide quick replies on text change - let user control via toggle
                   }}
                   multiline
                   maxLength={4096}
                   onFocus={() => {
-                    if (chatState.quickReplies.length > 0 && messageText.length === 0) {
+                    // Show quick replies on focus if available
+                    if (chatState.quickReplies.length > 0) {
                       setShowQuickReplies(true);
                     }
                   }}
@@ -638,6 +649,12 @@ const styles = StyleSheet.create({
     color: '#089B21',
     fontSize: 13,
     fontWeight: '500',
+  },
+  quickReplyEmptyText: {
+    color: '#9BA1A6',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 4,
   },
   inputArea: {
     backgroundColor: '#fff',

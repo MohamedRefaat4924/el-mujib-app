@@ -133,6 +133,10 @@ async function getHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
+// Flutter's _setHeaders() sends ALL headers including Content-type for multipart uploads.
+// The Dart HTTP library's MultipartRequest overrides Content-Type to multipart/form-data with boundary.
+// But the other headers (X-Requested-With, api-request-signature, Authorization) are critical.
+// For React Native fetch with FormData, we must NOT set Content-Type manually - fetch sets it with boundary.
 async function getMultipartHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = {
@@ -292,6 +296,8 @@ export async function apiPost(
 
 // Upload file matching Flutter's data_transport.uploadFile
 // Uses 'filepond' as the file field name, matching Flutter exactly
+// Flutter's _setHeaders() sends Content-type: application/json even for multipart,
+// but Dart's MultipartRequest overrides it. In RN, fetch auto-sets Content-Type for FormData.
 export async function uploadFile(
   fileUri: string,
   fileName: string,
@@ -308,7 +314,7 @@ export async function uploadFile(
     const headers = await getMultipartHeaders();
     const formData = new FormData();
 
-    // Add additional input data fields
+    // Add additional input data fields (Flutter: request.fields.addAll(inputData))
     if (options?.inputData) {
       Object.entries(options.inputData).forEach(([key, value]) => {
         formData.append(key, value);
@@ -316,18 +322,24 @@ export async function uploadFile(
     }
 
     // Add file with field name 'filepond' matching Flutter exactly
+    // Flutter: request.files.add(await http.MultipartFile.fromPath('filepond', filename, contentType: MediaType.parse(mimeType)))
     if (Platform.OS === 'web') {
       // For web, fileUri is a blob URL or File object
       const response = await fetch(fileUri);
       const blob = await response.blob();
-      formData.append('filepond', blob, fileName);
+      // Create a File object with proper name and type for web
+      const file = new File([blob], fileName, { type: mimeType });
+      formData.append('filepond', file);
     } else {
+      // For React Native, we pass an object with uri, type, name
       formData.append('filepond', {
         uri: fileUri,
         type: mimeType,
         name: fileName,
       } as any);
     }
+
+    console.log(`[Upload] Uploading to ${apiUrl}${uploadUrl} file=${fileName} type=${mimeType}`);
 
     const response = await fetch(`${apiUrl}${uploadUrl}`, {
       method: 'POST',
@@ -336,21 +348,29 @@ export async function uploadFile(
     });
 
     const text = await response.text();
+    console.log(`[Upload] Response status: ${response.status}, body preview: ${text.substring(0, 200)}`);
+
     let data: any;
     try {
       data = JSON.parse(text);
     } catch {
-      console.error(`Upload to ${uploadUrl} - Response is not JSON:`, text.substring(0, 200));
+      console.error(`Upload to ${uploadUrl} - Response is not JSON:`, text.substring(0, 300));
       throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
     }
 
     if (response.ok) {
-      if (options?.onSuccess) {
-        options.onSuccess(data);
+      // Check for reaction success like Flutter's _thenProcessing
+      if (data.reaction === 1 || data.reaction === 21 || !data.reaction) {
+        if (options?.onSuccess) {
+          options.onSuccess(data);
+        }
+        return data;
+      } else {
+        throw new Error(data?.data?.message || 'Upload processing failed');
       }
-      return data;
     } else {
-      throw new Error(data?.message || `Upload failed: HTTP ${response.status}`);
+      console.error(`Upload failed with status ${response.status}:`, JSON.stringify(data).substring(0, 500));
+      throw new Error(data?.data?.message || data?.message || `Upload failed: HTTP ${response.status}`);
     }
   } catch (error) {
     console.error(`Upload to ${uploadUrl} error:`, error);

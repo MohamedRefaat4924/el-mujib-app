@@ -54,3 +54,7 @@
 - [x] Fix chat-box-data endpoint: pass 'null' like Flutter when no userId
 - [x] Fix messages fetch: POST → GET, matching Flutter's data_transport.get()
 - [x] Fix fetchChatBoxData endpoint URL construction
+- [x] Fix upload 406 error: match Flutter's upload flow exactly (add prepare-send-media step, improve error handling)
+- [x] Fix quick reply not working (toggle always works, filter by input, show on focus)
+- [x] Fix interactive message rendering (parse template_message HTML for buttons/lists, render natively)
+- [ ] Fix duplicate key warning in contacts list FlatList

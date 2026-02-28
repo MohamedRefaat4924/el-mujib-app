@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,154 @@ interface MessageBubbleProps {
   onImagePress?: (url: string) => void;
 }
 
+// Parse HTML template_message into renderable components
+// Flutter uses flutter_html to render this HTML. We parse it into native components.
+// The HTML contains classes like:
+// - lw-whatsapp-buttons: container for interactive buttons
+// - list-group-item: individual button/list items
+// - lw-whatsapp-footer: footer text
+// - card: card container
+function parseTemplateHtml(html: string): {
+  headerText?: string;
+  headerImageUrl?: string;
+  bodyText?: string;
+  footerText?: string;
+  buttons: Array<{ text: string; url?: string }>;
+  isInteractive: boolean;
+} {
+  const result: {
+    headerText?: string;
+    headerImageUrl?: string;
+    bodyText?: string;
+    footerText?: string;
+    buttons: Array<{ text: string; url?: string }>;
+    isInteractive: boolean;
+  } = { buttons: [], isInteractive: false };
+
+  if (!html || html.trim() === '') return result;
+
+  // Check if it has interactive buttons
+  const hasButtons = html.includes('lw-whatsapp-buttons') || html.includes('list-group-item');
+  result.isInteractive = hasButtons;
+
+  // Extract image from <img> tags
+  const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (imgMatch) {
+    result.headerImageUrl = imgMatch[1];
+  }
+
+  // Extract footer text (class lw-whatsapp-footer or text-muted)
+  const footerMatch = html.match(/<div[^>]*class="[^"]*lw-whatsapp-footer[^"]*"[^>]*>(.*?)<\/div>/is);
+  if (footerMatch) {
+    result.footerText = stripHtml(footerMatch[1]).trim();
+  }
+
+  // Extract buttons from list-group-item elements
+  const buttonRegex = /<[^>]*class="[^"]*list-group-item[^"]*"[^>]*>(.*?)<\/(?:a|div|span|li)>/gis;
+  let btnMatch;
+  while ((btnMatch = buttonRegex.exec(html)) !== null) {
+    const btnText = stripHtml(btnMatch[1]).trim();
+    if (btnText) {
+      // Check if it's a link
+      const hrefMatch = btnMatch[0].match(/href=["']([^"']+)["']/i);
+      result.buttons.push({
+        text: btnText,
+        url: hrefMatch ? hrefMatch[1] : undefined,
+      });
+    }
+  }
+
+  // Also check for <a> tags with list-group-item or inside lw-whatsapp-buttons
+  if (result.buttons.length === 0) {
+    const linkBtnRegex = /<a[^>]*>(.*?)<\/a>/gis;
+    let linkMatch;
+    const buttonsSection = html.match(/<div[^>]*class="[^"]*lw-whatsapp-buttons[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+    const searchHtml = buttonsSection ? buttonsSection[1] : '';
+    if (searchHtml) {
+      while ((linkMatch = linkBtnRegex.exec(searchHtml)) !== null) {
+        const linkText = stripHtml(linkMatch[1]).trim();
+        if (linkText) {
+          const hrefMatch = linkMatch[0].match(/href=["']([^"']+)["']/i);
+          result.buttons.push({
+            text: linkText,
+            url: hrefMatch ? hrefMatch[1] : undefined,
+          });
+        }
+      }
+    }
+  }
+
+  // Extract body text - everything that's not in buttons or footer
+  // First, try to get text from <div> elements that aren't buttons/footer
+  let bodyHtml = html;
+  // Remove button sections
+  bodyHtml = bodyHtml.replace(/<div[^>]*class="[^"]*lw-whatsapp-buttons[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  bodyHtml = bodyHtml.replace(/<div[^>]*class="[^"]*list-group[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  // Remove footer
+  bodyHtml = bodyHtml.replace(/<div[^>]*class="[^"]*lw-whatsapp-footer[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  // Remove images (already extracted)
+  bodyHtml = bodyHtml.replace(/<img[^>]*>/gi, '');
+
+  const bodyText = stripHtml(bodyHtml).trim();
+  if (bodyText) {
+    result.bodyText = bodyText;
+  }
+
+  return result;
+}
+
+// Strip HTML tags and decode entities
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<strong>(.*?)<\/strong>/gi, '$1')
+    .replace(/<b>(.*?)<\/b>/gi, '$1')
+    .replace(/<em>(.*?)<\/em>/gi, '$1')
+    .replace(/<i>(.*?)<\/i>/gi, '$1')
+    .replace(/<a[^>]*>(.*?)<\/a>/gi, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function MessageBubble({ message, onInteractiveButtonPress, onImagePress }: MessageBubbleProps) {
   const isOutgoing = message.message_from === 2;
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
+  // Parse template_message HTML if present
+  const templateData = useMemo(() => {
+    if (message.template_message && message.template_message.trim()) {
+      return parseTemplateHtml(message.template_message);
+    }
+    return null;
+  }, [message.template_message]);
+
+  // Determine if we should render template HTML instead of standard type rendering
+  const shouldRenderTemplate = useMemo(() => {
+    if (!templateData) return false;
+    // Flutter renders template_message for all types EXCEPT document, audio, video
+    // (see message_bubble.dart line 614-619)
+    if (message.message_type === 'document' || message.message_type === 'audio' || message.message_type === 'video') {
+      return false;
+    }
+    return true;
+  }, [templateData, message.message_type]);
+
   const renderContent = () => {
+    // If we have template_message HTML and should render it, use the parsed template
+    if (shouldRenderTemplate && templateData) {
+      return renderTemplateHtml();
+    }
+
     switch (message.message_type) {
       case 'text':
         return renderTextMessage();
@@ -46,12 +189,94 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
       case 'interactive':
         return renderInteractiveMessage();
       case 'template':
-        return renderTemplateMessage();
+        return renderTemplateTypeMessage();
       case 'reaction':
         return renderReactionMessage();
       default:
         return renderUnsupportedMessage();
     }
+  };
+
+  // Render parsed template_message HTML as native components
+  // This matches Flutter's flutter_html rendering of template_message
+  const renderTemplateHtml = () => {
+    if (!templateData) return null;
+
+    return (
+      <View>
+        {/* Header Image */}
+        {templateData.headerImageUrl && (
+          <TouchableOpacity
+            onPress={() => {
+              setImageViewerUrl(templateData.headerImageUrl!);
+              onImagePress?.(templateData.headerImageUrl!);
+            }}
+            activeOpacity={0.9}
+          >
+            <ExpoImage
+              source={{ uri: templateData.headerImageUrl }}
+              style={styles.interactiveHeaderImage}
+              contentFit="cover"
+              transition={200}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Header Text */}
+        {templateData.headerText && (
+          <Text style={[styles.interactiveHeader, isOutgoing && styles.outgoingText]}>
+            {templateData.headerText}
+          </Text>
+        )}
+
+        {/* Body Text */}
+        {templateData.bodyText && (
+          <Text style={[styles.messageText, isOutgoing && styles.outgoingText]}>
+            {templateData.bodyText}
+          </Text>
+        )}
+
+        {/* Also show formatted_message if body is empty and message has text */}
+        {!templateData.bodyText && message.formatted_message && (
+          <Text style={[styles.messageText, isOutgoing && styles.outgoingText]}>
+            {formatTextWithHtml(message.formatted_message)}
+          </Text>
+        )}
+
+        {/* Footer */}
+        {templateData.footerText && (
+          <Text style={styles.interactiveFooter}>{templateData.footerText}</Text>
+        )}
+
+        {/* Interactive Buttons */}
+        {templateData.buttons.length > 0 && (
+          <View style={styles.buttonsContainer}>
+            {templateData.buttons.map((btn, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.interactiveButton}
+                onPress={() => {
+                  if (btn.url) {
+                    Linking.openURL(btn.url);
+                  } else {
+                    // Send button text as reply
+                    onInteractiveButtonPress?.(String(idx), btn.text);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                {btn.url ? (
+                  <MaterialIcons name="open-in-new" size={14} color="#089B21" style={{ marginRight: 4 }} />
+                ) : (
+                  <MaterialIcons name="reply" size={14} color="#089B21" style={{ marginRight: 4 }} />
+                )}
+                <Text style={styles.interactiveButtonText}>{btn.text}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   const renderTextMessage = () => {
@@ -250,14 +475,22 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
   };
 
   const renderInteractiveMessage = () => {
-    const interactiveData = message.__data?.interaction_message_data;
-    if (!interactiveData) {
-      return <Text style={[styles.messageText, isOutgoing && styles.outgoingText]}>{message.formatted_message || 'Interactive message'}</Text>;
+    // First check if we have template_message HTML (this is how Flutter renders interactive messages)
+    if (templateData && templateData.isInteractive) {
+      return renderTemplateHtml();
     }
 
-    const type = interactiveData.type;
+    // Fallback: try to parse from __data.interaction_message_data (raw WhatsApp API format)
+    const interactiveData = message.__data?.interaction_message_data;
+    if (!interactiveData) {
+      return (
+        <Text style={[styles.messageText, isOutgoing && styles.outgoingText]}>
+          {message.formatted_message || 'Interactive message'}
+        </Text>
+      );
+    }
 
-    // Button reply or list reply
+    // Button reply or list reply (incoming user selections)
     if (interactiveData.button_reply) {
       return (
         <View style={styles.interactiveReply}>
@@ -345,9 +578,15 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
     );
   };
 
-  const renderTemplateMessage = () => {
-    const templateData = message.__data?.template_message_data;
-    const components = templateData?.components || [];
+  const renderTemplateTypeMessage = () => {
+    // If we have template_message HTML, render it
+    if (templateData) {
+      return renderTemplateHtml();
+    }
+
+    // Fallback: try to render from __data.template_message_data
+    const tmplData = message.__data?.template_message_data;
+    const components = tmplData?.components || [];
 
     return (
       <View>
@@ -422,6 +661,10 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress 
   };
 
   const renderUnsupportedMessage = () => {
+    // Even for unsupported types, try template_message first
+    if (templateData && (templateData.bodyText || templateData.buttons.length > 0)) {
+      return renderTemplateHtml();
+    }
     return (
       <View style={styles.unsupportedContainer}>
         <MaterialIcons name="info" size={16} color="#9BA1A6" />
@@ -485,6 +728,8 @@ function formatTextWithHtml(text: string): string {
   return text
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<b>(.*?)<\/b>/gi, '$1')
+    .replace(/<strong>(.*?)<\/strong>/gi, '$1')
+    .replace(/<em>(.*?)<\/em>/gi, '$1')
     .replace(/<i>(.*?)<\/i>/gi, '$1')
     .replace(/<a[^>]*>(.*?)<\/a>/gi, '$1')
     .replace(/<[^>]+>/g, '')
@@ -492,7 +737,8 @@ function formatTextWithHtml(text: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'");
+    .replace(/&#039;/g, "'")
+    .replace(/&nbsp;/g, ' ');
 }
 
 const styles = StyleSheet.create({
@@ -661,11 +907,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexWrap: 'wrap',
   },
   interactiveDesc: {
     fontSize: 12,
     color: '#687076',
     marginTop: 2,
+    width: '100%',
   },
   interactiveHeader: {
     fontSize: 15,
@@ -682,6 +930,9 @@ const styles = StyleSheet.create({
   interactiveFooter: {
     fontSize: 12,
     color: '#687076',
+    marginTop: 4,
+  },
+  buttonsContainer: {
     marginTop: 4,
   },
   interactiveButton: {

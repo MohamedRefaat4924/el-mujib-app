@@ -131,6 +131,7 @@ export interface ChatMessage {
   formatted_message: string;
   formatted_message_time: string;
   whatsapp_message_error?: string;
+  template_message?: string;
   __data: MessageData;
   reaction?: { emoji: string };
 }
