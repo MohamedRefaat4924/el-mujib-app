@@ -90,3 +90,6 @@
 - [x] Add local push notification for new messages (expo-notifications with tap-to-navigate to chat)
 - [x] Add image gallery viewer: tap image in chat to open fullscreen, swipe to browse other images in conversation
 - [x] Add copy message option: long-press on message to copy text content (with haptic feedback)
+- [x] Add video sending using same flow as image sending (ImagePicker with video option)
+- [x] Add inline video player in chat message bubbles (expo-video VideoView with native controls)
+- [x] Align audio upload to use the exact same upload flow as images (removed base64/Blob workaround, now uses standard RN FormData for all file types)

@@ -12,6 +12,7 @@ import { Image as ExpoImage } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ChatMessage, MessageData, InteractiveMessageData, TemplateComponent } from '@/lib/types';
 import { InlineAudioPlayer } from './audio-player';
+import { InlineVideoPlayer } from './video-player';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_BUBBLE_WIDTH = SCREEN_WIDTH * 0.78;
@@ -338,28 +339,21 @@ export function MessageBubble({ message, onInteractiveButtonPress, onImagePress,
   const renderVideoMessage = () => {
     const mediaUrl = message.__data?.media_url;
     const caption = message.__data?.caption || message.formatted_message;
+    if (!mediaUrl) {
+      return (
+        <View style={styles.mediaPlaceholder}>
+          <MaterialIcons name="videocam-off" size={32} color="#9BA1A6" />
+          <Text style={styles.placeholderText}>Video unavailable</Text>
+        </View>
+      );
+    }
     return (
-      <View>
-        <TouchableOpacity
-          style={styles.videoContainer}
-          onPress={() => mediaUrl && Linking.openURL(mediaUrl)}
-          activeOpacity={0.8}
-        >
-          {mediaUrl ? (
-            <ExpoImage
-              source={{ uri: mediaUrl }}
-              style={styles.messageImage}
-              contentFit="cover"
-            />
-          ) : null}
-          <View style={styles.videoPlayOverlay}>
-            <MaterialIcons name="play-circle-fill" size={48} color="rgba(255,255,255,0.9)" />
-          </View>
-        </TouchableOpacity>
-        {caption ? (
-          <Text style={[styles.captionText, isOutgoing && styles.outgoingText]}>{caption}</Text>
-        ) : null}
-      </View>
+      <InlineVideoPlayer
+        mediaUrl={mediaUrl}
+        messageId={message._uid}
+        isOutgoing={isOutgoing}
+        caption={caption || undefined}
+      />
     );
   };
 

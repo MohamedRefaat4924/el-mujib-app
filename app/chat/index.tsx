@@ -231,6 +231,32 @@ export default function ChatScreen() {
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
+  const handleSendVideo = useCallback(async () => {
+    setShowAttachMenu(false);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['videos'],
+        allowsMultipleSelection: false,
+        quality: 0.8,
+        videoMaxDuration: 120, // 2 minutes max
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const asset = result.assets[0];
+        await sendMediaMessage(contactUid, {
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'video/mp4',
+          fileName: asset.fileName || `video_${Date.now()}.mp4`,
+        }, 'video');
+        setTimeout(() => {
+          fetchMessages(vendorUid, contactUid, { isRefresh: true });
+        }, 2000);
+      }
+    } catch (e) {
+      console.error('Video picker error:', e);
+    }
+  }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
+
   const handleTakePhoto = useCallback(async () => {
     setShowAttachMenu(false);
     try {
@@ -697,6 +723,12 @@ export default function ChatScreen() {
             </View>
             <Text style={styles.attachLabel}>Gallery</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.attachOption} onPress={handleSendVideo}>
+            <View style={[styles.attachIconBg, { backgroundColor: '#7C3AED' }]}>
+              <MaterialIcons name="videocam" size={22} color="#fff" />
+            </View>
+            <Text style={styles.attachLabel}>Video</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.attachOption} onPress={handleSendDocument}>
             <View style={[styles.attachIconBg, { backgroundColor: '#D7A81B' }]}>
               <MaterialIcons name="description" size={22} color="#fff" />
@@ -1068,9 +1100,12 @@ const styles = StyleSheet.create({
     right: 12,
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    justifyContent: 'space-evenly',
+    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -1080,11 +1115,12 @@ const styles = StyleSheet.create({
   attachOption: {
     alignItems: 'center',
     gap: 6,
+    width: 60,
   },
   attachIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
   },

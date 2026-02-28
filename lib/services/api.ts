@@ -369,47 +369,19 @@ export async function uploadFile(
 
     // Add file with field name 'filepond' matching Flutter exactly
     // Flutter: request.files.add(await http.MultipartFile.fromPath('filepond', filename, contentType: MediaType.parse(mimeType)))
+    // Use the SAME approach for ALL file types (images, audio, video, documents).
+    // The standard RN FormData {uri, type, name} approach works perfectly for images/docs/camera.
+    // Previously audio used a complex base64→Blob workaround, but the standard approach
+    // should work the same way for audio as it does for images.
     if (Platform.OS === 'web') {
       // For web, fileUri is a blob URL or File object
       const response = await fetch(fileUri);
       const blob = await response.blob();
       const file = new File([blob], sanitizedFileName, { type: sanitizedMimeType });
       formData.append('filepond', file);
-    } else if (uploadUrl.includes('whatsapp_audio') || uploadUrl.includes('audio')) {
-      // For audio files on native: read as base64 and create a proper Blob
-      // This ensures the Content-Type in the multipart boundary matches exactly
-      // what we declare, mimicking Flutter's MultipartFile.fromPath behavior.
-      // React Native's FormData with {uri, type, name} can have the native layer
-      // override the MIME type based on file content inspection.
-      try {
-        console.log(`[Upload] Reading audio file as base64: ${fileUri}`);
-        const base64Data = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        console.log(`[Upload] Base64 length: ${base64Data.length}`);
-        
-        // Convert base64 to byte array
-        const binaryStr = atob(base64Data);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-        
-        // Create Blob with explicit MIME type
-        const blob = new Blob([bytes], { type: sanitizedMimeType });
-        console.log(`[Upload] Created Blob: size=${blob.size}, type=${blob.type}`);
-        formData.append('filepond', blob, sanitizedFileName);
-      } catch (readErr) {
-        console.warn('[Upload] Base64 read failed, falling back to URI approach:', readErr);
-        // Fallback to standard RN approach
-        formData.append('filepond', {
-          uri: fileUri,
-          type: sanitizedMimeType,
-          name: sanitizedFileName,
-        } as any);
-      }
     } else {
-      // For non-audio files on native: standard RN FormData approach (works for images/docs)
+      // For ALL native files (images, audio, video, documents): standard RN FormData approach
+      // This is the same approach that works perfectly for images and documents
       formData.append('filepond', {
         uri: fileUri,
         type: sanitizedMimeType,
