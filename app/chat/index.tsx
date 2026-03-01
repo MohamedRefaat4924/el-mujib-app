@@ -35,6 +35,7 @@ import { ImageGallery } from '@/components/chat/image-gallery';
 import { ChatMessage } from '@/lib/types';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
 
 // Recording preset - platform-specific formats:
 // iOS: MPEG4AAC codec always produces M4A/MP4 container → send as audio/mp4 with .m4a
@@ -147,6 +148,7 @@ export default function ChatScreen() {
   const [savingVoiceName, setSavingVoiceName] = useState('');
   const [galleryImageUrl, setGalleryImageUrl] = useState<string | null>(null);
   const [showCopyMenu, setShowCopyMenu] = useState<{ message: ChatMessage; y: number } | null>(null);
+  const [isConvertingAudio, setIsConvertingAudio] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
 
@@ -354,16 +356,25 @@ export default function ChatScreen() {
             {
               text: 'Send Now',
               onPress: async () => {
-                // Platform-specific MIME: iOS=audio/mp4 (M4A), Android=audio/aac (ADTS)
-                // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-                await sendMediaMessage(contactUid, {
-                  uri,
-                  mimeType: VOICE_MIME_TYPE,
-                  fileName: `voice_${Date.now()}${VOICE_EXTENSION}`,
-                }, 'audio');
-                setTimeout(() => {
-                  fetchMessages(vendorUid, contactUid, { isRefresh: true });
-                }, 1500);
+                try {
+                  setIsConvertingAudio(true);
+                  // Convert to real OGG format via local server, then send
+                  const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
+                  console.log('[Recording] Sending voice:', voiceFile);
+                  await sendMediaMessage(contactUid, {
+                    uri: voiceFile.uri,
+                    mimeType: voiceFile.mimeType,
+                    fileName: voiceFile.fileName,
+                  }, 'audio');
+                  setTimeout(() => {
+                    fetchMessages(vendorUid, contactUid, { isRefresh: true });
+                  }, 1500);
+                } catch (sendErr: any) {
+                  console.error('[Recording] Send error:', sendErr);
+                  Alert.alert('Error', 'Failed to send voice message.');
+                } finally {
+                  setIsConvertingAudio(false);
+                }
               },
             },
             {
@@ -416,10 +427,14 @@ export default function ChatScreen() {
   const handleSendSavedVoice = useCallback(async (voice: SavedVoiceMessage) => {
     setShowSavedVoices(false);
     try {
+      setIsConvertingAudio(true);
+      // Convert saved voice to real OGG format before sending
+      const voiceFile = await prepareVoiceForSending(voice.uri, voice.name);
+      console.log('[SavedVoice] Sending converted voice:', voiceFile);
       await sendMediaMessage(contactUid, {
-        uri: voice.uri,
-        mimeType: VOICE_MIME_TYPE,
-        fileName: `${voice.name}${VOICE_EXTENSION}`,
+        uri: voiceFile.uri,
+        mimeType: voiceFile.mimeType,
+        fileName: voiceFile.fileName,
       }, 'audio');
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -427,6 +442,8 @@ export default function ChatScreen() {
     } catch (e) {
       console.error('Error sending saved voice:', e);
       Alert.alert('Error', 'Failed to send voice message. The file may have been deleted.');
+    } finally {
+      setIsConvertingAudio(false);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -628,7 +645,12 @@ export default function ChatScreen() {
         keyboardVerticalOffset={0}
       >
         <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          {recorderState.isRecording ? (
+          {isConvertingAudio ? (
+            <View style={styles.recordingBar}>
+              <ActivityIndicator size="small" color="#1A6B3C" />
+              <Text style={[styles.recordingTime, { marginLeft: 8, flex: 1 }]}>Converting voice to OGG...</Text>
+            </View>
+          ) : recorderState.isRecording ? (
             <View style={styles.recordingBar}>
               <TouchableOpacity onPress={handleCancelRecording} style={styles.cancelRecordBtn}>
                 <MaterialIcons name="close" size={24} color="#F5365C" />

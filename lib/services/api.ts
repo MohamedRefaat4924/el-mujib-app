@@ -170,10 +170,27 @@ export async function apiGet(
       url += (url.includes('?') ? '&' : '?') + params.toString();
     }
 
+    // === REQUEST LOG ===
+    console.log(`\n📤 [API GET] ${url}`);
+    console.log(`📤 [HEADERS]`, JSON.stringify(headers, null, 2));
+
     const response = await fetch(url, {
       method: 'GET',
       headers,
     });
+
+    const responseText = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = responseText;
+    }
+
+    // === RESPONSE LOG ===
+    console.log(`📥 [RESPONSE] ${url}`);
+    console.log(`📥 [STATUS] ${response.status} ${response.statusText}`);
+    console.log(`📥 [BODY] ${JSON.stringify(data)?.substring(0, 500)}`);
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -183,13 +200,12 @@ export async function apiGet(
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const data = await response.json();
     if (options?.onSuccess) {
       options.onSuccess(data);
     }
     return data;
   } catch (error) {
-    console.error(`API GET ${endpoint} error:`, error);
+    console.error(`❌ [API GET] ${endpoint} error:`, error);
     if (options?.onError) {
       options.onError(error);
     }
@@ -217,7 +233,13 @@ export async function apiPost(
       bodyData = encryptInputData(inputData, options.unSecuredFields);
     }
 
-    const response = await fetch(`${apiUrl}${endpoint}`, {
+    // === REQUEST LOG ===
+    const fullPostUrl = `${apiUrl}${endpoint}`;
+    console.log(`\n📤 [API POST] ${fullPostUrl}`);
+    console.log(`📤 [HEADERS]`, JSON.stringify(headers, null, 2));
+    console.log(`📤 [BODY]`, JSON.stringify(bodyData)?.substring(0, 500));
+
+    const response = await fetch(fullPostUrl, {
       method: 'POST',
       headers,
       body: bodyData ? JSON.stringify(bodyData) : undefined,
@@ -225,11 +247,17 @@ export async function apiPost(
 
     // Try to parse as JSON
     const text = await response.text();
+
+    // === RESPONSE LOG ===
+    console.log(`📥 [RESPONSE] ${fullPostUrl}`);
+    console.log(`📥 [STATUS] ${response.status} ${response.statusText}`);
+    console.log(`📥 [BODY] ${text.substring(0, 500)}`);
+
     let data: any;
     try {
       data = JSON.parse(text);
     } catch (parseError) {
-      console.error(`API POST ${endpoint} - Response is not JSON:`, text.substring(0, 200));
+      console.error(`❌ API POST ${endpoint} - Response is not JSON:`, text.substring(0, 200));
       throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
     }
 
@@ -287,7 +315,7 @@ export async function apiPost(
       throw new Error(data?.data?.message || data?.message || `HTTP ${response.status}`);
     }
   } catch (error) {
-    console.error(`API POST ${endpoint} error:`, error);
+    console.error(`❌ [API POST] ${endpoint} error:`, error);
     if (options?.onFailed && !(error as any)._handled) {
       options.onFailed(error);
     }
@@ -358,7 +386,17 @@ export async function uploadFile(
         }
       }
     }
-    console.log(`[Upload] Final: mimeType=${sanitizedMimeType}, fileName=${sanitizedFileName}, uploadUrl=${uploadUrl}`);
+    // === UPLOAD REQUEST LOG ===
+    console.log(`\n📤 [UPLOAD] ${apiUrl}${uploadUrl}`);
+    console.log(`📤 [UPLOAD HEADERS]`, JSON.stringify(headers, null, 2));
+    console.log(`📤 [UPLOAD FILE]`, JSON.stringify({
+      originalUri: fileUri?.substring(0, 100),
+      originalFileName: fileName,
+      originalMimeType: mimeType,
+      sanitizedFileName,
+      sanitizedMimeType,
+      uploadPath: uploadUrl,
+    }, null, 2));
 
     // Add additional input data fields (Flutter: request.fields.addAll(inputData))
     if (options?.inputData) {
@@ -389,7 +427,7 @@ export async function uploadFile(
       } as any);
     }
 
-    console.log(`[Upload] Uploading to ${apiUrl}${uploadUrl} file=${sanitizedFileName} type=${sanitizedMimeType}`);
+    console.log(`📤 [UPLOAD] Sending to ${apiUrl}${uploadUrl}...`);
 
     const response = await fetch(`${apiUrl}${uploadUrl}`, {
       method: 'POST',
@@ -398,7 +436,12 @@ export async function uploadFile(
     });
 
     const text = await response.text();
-    console.log(`[Upload] Response status: ${response.status}, body preview: ${text.substring(0, 200)}`);
+
+    // === UPLOAD RESPONSE LOG ===
+    console.log(`📥 [UPLOAD RESPONSE] ${apiUrl}${uploadUrl}`);
+    console.log(`📥 [STATUS] ${response.status} ${response.statusText}`);
+    console.log(`📥 [RESPONSE HEADERS]`, JSON.stringify(Object.fromEntries(response.headers.entries())));
+    console.log(`📥 [BODY] ${text.substring(0, 500)}`);
 
     let data: any;
     try {
@@ -443,18 +486,30 @@ export async function apiPostMultipart(
   try {
     const apiUrl = getApiUrl();
     const headers = await getMultipartHeaders();
-    const response = await fetch(`${apiUrl}${endpoint}`, {
+
+    // === MULTIPART REQUEST LOG ===
+    const fullMultipartUrl = `${apiUrl}${endpoint}`;
+    console.log(`\n📤 [API POST MULTIPART] ${fullMultipartUrl}`);
+    console.log(`📤 [HEADERS]`, JSON.stringify(headers, null, 2));
+
+    const response = await fetch(fullMultipartUrl, {
       method: 'POST',
       headers,
       body: formData,
     });
 
     const text = await response.text();
+
+    // === MULTIPART RESPONSE LOG ===
+    console.log(`📥 [RESPONSE] ${fullMultipartUrl}`);
+    console.log(`📥 [STATUS] ${response.status} ${response.statusText}`);
+    console.log(`📥 [BODY] ${text.substring(0, 500)}`);
+
     let data: any;
     try {
       data = JSON.parse(text);
     } catch {
-      console.error(`API POST multipart ${endpoint} - Response is not JSON:`, text.substring(0, 200));
+      console.error(`❌ API POST multipart ${endpoint} - Response is not JSON:`, text.substring(0, 200));
       throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
     }
 

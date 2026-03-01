@@ -93,3 +93,6 @@
 - [x] Add video sending using same flow as image sending (ImagePicker with video option)
 - [x] Add inline video player in chat message bubbles (expo-video VideoView with native controls)
 - [x] Align audio upload to use the exact same upload flow as images (removed base64/Blob workaround, now uses standard RN FormData for all file types)
+- [x] Convert recorded voice to real OGG format before upload (server-side FFmpeg conversion: AAC/M4A → OGG/Opus via /api/convert-audio endpoint)
+- [x] Add comprehensive console logging for all API requests (endpoint, headers, full request body) and responses (📤/📥 emoji prefixed logs for GET, POST, UPLOAD, MULTIPART)
+- [x] Fix upload headers to ensure correct Content-Type for multipart uploads (multipart headers exclude Content-Type so fetch auto-sets boundary)
