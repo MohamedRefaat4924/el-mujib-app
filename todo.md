@@ -105,3 +105,4 @@
 - [x] Replace voice recording approach: tried react-native-audio-recorder-player (AMR native) but requires dev client, not Expo Go compatible. Reverted to expo-audio with AAC recording + audio/aac MIME type (directly accepted by server).
 - [x] Remove server-side voice proxy approach - now sends AAC directly to elmujib.com with audio/aac MIME type, no proxy/conversion needed
 - [x] Removed react-native-audio-recorder-player and react-native-nitro-modules packages (not Expo Go compatible)
+- [x] Bug: 'prepareToRecordAsync' fails on iOS - Fixed: changed sampleRate from 16000 to 44100 and bitRate from 64000 to 128000 (iOS standard). Also use platform-specific MIME: audio/mp4 for iOS (M4A), audio/aac for Android

@@ -43,25 +43,19 @@ describe('Upload Progress Helper', () => {
 });
 
 describe('Voice Send Helper', () => {
-  it('prepareVoiceForSending returns file with aac extension and audio/aac mime', async () => {
-    // Mock all native dependencies
+  it('prepareVoiceForSending returns file with platform-specific mime and extension', async () => {
+    // Mock iOS platform
     vi.mock('react-native', () => ({
       Platform: { OS: 'ios' },
     }));
-    vi.mock('expo-file-system/legacy', () => ({
-      uploadAsync: vi.fn(),
-      FileSystemUploadType: { MULTIPART: 0 },
-    }));
-    vi.mock('../lib/services/api', () => ({
-      getAuthToken: vi.fn().mockResolvedValue('test-token'),
-    }));
     
     const { prepareVoiceForSending } = await import('../lib/services/voice-send-helper');
-    const result = await prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
+    const result = prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
     
     expect(result.uri).toBe('file:///test/recording.m4a');
-    expect(result.mimeType).toBe('audio/aac');
-    expect(result.fileName).toBe('voice_123.aac');
+    // iOS: M4A container = MP4 audio → audio/mp4
+    expect(result.mimeType).toBe('audio/mp4');
+    expect(result.fileName).toBe('voice_123.m4a');
     
     vi.restoreAllMocks();
   });

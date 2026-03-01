@@ -39,15 +39,16 @@ import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
 import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
 
 // Recording preset - AAC format on both platforms
-// iOS: MPEG4AAC codec produces M4A container
+// iOS: MPEG4AAC codec produces M4A container (which is MP4 audio)
 // Android: aac_adts produces raw ADTS AAC bitstream
 // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-// We declare audio/aac with .aac extension which the server accepts directly.
+// iOS M4A files are sent as audio/mp4 (M4A = MP4 audio container)
+// Android AAC files are sent as audio/aac
 const VOICE_RECORDING_PRESET = {
-  extension: '.aac',
-  sampleRate: 16000,
+  extension: '.m4a',
+  sampleRate: 44100,
   numberOfChannels: 1,
-  bitRate: 64000,
+  bitRate: 128000,
   android: {
     outputFormat: 'aac_adts' as const,
     audioEncoder: 'aac' as const,
@@ -61,7 +62,7 @@ const VOICE_RECORDING_PRESET = {
   },
   web: {
     mimeType: 'audio/webm',
-    bitsPerSecond: 64000,
+    bitsPerSecond: 128000,
   },
 };
 
