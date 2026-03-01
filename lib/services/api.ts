@@ -336,6 +336,7 @@ export async function uploadFile(
     inputData?: Record<string, string>;
     onSuccess?: (data: any) => void;
     onError?: (error: any) => void;
+    onProgress?: (progress: number) => void;
   }
 ): Promise<any> {
   try {
@@ -429,18 +430,52 @@ export async function uploadFile(
 
     console.log(`📤 [UPLOAD] Sending to ${apiUrl}${uploadUrl}...`);
 
-    const response = await fetch(`${apiUrl}${uploadUrl}`, {
-      method: 'POST',
-      headers,
-      body: formData,
+    // Use XMLHttpRequest for upload progress tracking
+    const fullUrl = `${apiUrl}${uploadUrl}`;
+    const { text, status, statusText } = await new Promise<{ text: string; status: number; statusText: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', fullUrl, true);
+
+      // Set headers
+      Object.entries(headers).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
+      });
+
+      // Track upload progress
+      if (xhr.upload && options?.onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            console.log(`📤 [UPLOAD PROGRESS] ${progress}% (${event.loaded}/${event.total})`);
+            options.onProgress!(progress);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        resolve({ text: xhr.responseText, status: xhr.status, statusText: xhr.statusText });
+      };
+
+      xhr.onerror = () => {
+        reject(new Error(`Upload network error to ${uploadUrl}`));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error(`Upload timeout to ${uploadUrl}`));
+      };
+
+      xhr.timeout = 120000; // 2 minute timeout for large files
+      xhr.send(formData);
     });
 
-    const text = await response.text();
+    // Report 100% on completion
+    if (options?.onProgress) {
+      options.onProgress(100);
+    }
 
     // === UPLOAD RESPONSE LOG ===
-    console.log(`📥 [UPLOAD RESPONSE] ${apiUrl}${uploadUrl}`);
-    console.log(`📥 [STATUS] ${response.status} ${response.statusText}`);
-    console.log(`📥 [RESPONSE HEADERS]`, JSON.stringify(Object.fromEntries(response.headers.entries())));
+    console.log(`📥 [UPLOAD RESPONSE] ${fullUrl}`);
+    console.log(`📥 [STATUS] ${status} ${statusText}`);
     console.log(`📥 [BODY] ${text.substring(0, 500)}`);
 
     let data: any;
@@ -448,10 +483,10 @@ export async function uploadFile(
       data = JSON.parse(text);
     } catch {
       console.error(`Upload to ${uploadUrl} - Response is not JSON:`, text.substring(0, 300));
-      throw new Error(`Server returned non-JSON response. Status: ${response.status}`);
+      throw new Error(`Server returned non-JSON response. Status: ${status}`);
     }
 
-    if (response.ok) {
+    if (status >= 200 && status < 300) {
       // Check for reaction success like Flutter's _thenProcessing
       if (data.reaction === 1 || data.reaction === 21 || !data.reaction) {
         if (options?.onSuccess) {
@@ -462,8 +497,8 @@ export async function uploadFile(
         throw new Error(data?.data?.message || 'Upload processing failed');
       }
     } else {
-      console.error(`Upload failed with status ${response.status}:`, JSON.stringify(data).substring(0, 500));
-      throw new Error(data?.data?.message || data?.message || `Upload failed: HTTP ${response.status}`);
+      console.error(`Upload failed with status ${status}:`, JSON.stringify(data).substring(0, 500));
+      throw new Error(data?.data?.message || data?.message || `Upload failed: HTTP ${status}`);
     }
   } catch (error) {
     console.error(`Upload to ${uploadUrl} error:`, error);

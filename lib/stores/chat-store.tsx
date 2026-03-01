@@ -167,7 +167,7 @@ interface ChatContextType {
   state: ChatState;
   fetchMessages: (vendorUid: string, contactUid: string, options?: { isRefresh?: boolean }) => Promise<void>;
   sendTextMessage: (contactUid: string, message: string) => Promise<void>;
-  sendMediaMessage: (contactUid: string, file: any, mediaType: string, caption?: string) => Promise<void>;
+  sendMediaMessage: (contactUid: string, file: any, mediaType: string, caption?: string, onProgress?: (progress: number, step: string) => void) => Promise<void>;
   sendTemplateMessage: (contactUid: string, template: any) => Promise<void>;
   resetChat: () => void;
   fetchTemplates: () => Promise<void>;
@@ -297,7 +297,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     contactUid: string,
     file: any,
     mediaType: string,
-    caption?: string
+    caption?: string,
+    onProgress?: (progress: number, step: string) => void
   ) => {
     dispatch({ type: 'SET_SENDING', payload: true });
     try {
@@ -346,6 +347,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         fileKeys: typeof file === 'object' ? Object.keys(file) : ['string'],
       });
 
+      // Report step progress
+      if (onProgress) onProgress(10, 'Uploading...');
+
       // Step 2: Upload file using 'filepond' field name (matching Flutter data_transport.uploadFile)
       let uploadResponse;
       try {
@@ -354,6 +358,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           fileName,
           mimeType,
           uploadPath,
+          {
+            onProgress: (uploadPct) => {
+              // Map upload progress (0-100) to overall progress (10-80)
+              if (onProgress) {
+                const overall = 10 + Math.round(uploadPct * 0.7);
+                onProgress(overall, `Uploading... ${uploadPct}%`);
+              }
+            },
+          },
         );
         console.log('[sendMediaMessage] Step 2 UPLOAD SUCCESS:', JSON.stringify(uploadResponse)?.substring(0, 300));
       } catch (uploadErr: any) {
@@ -397,10 +410,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         raw_upload_data: JSON.stringify(mediaData),
         caption: caption || '',
       };
+      if (onProgress) onProgress(85, 'Sending...');
       console.log('[sendMediaMessage] === STEP 3: send-media ===', JSON.stringify(sendPayload)?.substring(0, 500));
       try {
         const sendResult = await apiPost('vendor/whatsapp/contact/chat/send-media', sendPayload);
         console.log('[sendMediaMessage] Step 3 SEND SUCCESS:', JSON.stringify(sendResult)?.substring(0, 200));
+        if (onProgress) onProgress(100, 'Sent!');
       } catch (sendErr: any) {
         console.error('[sendMediaMessage] Step 3 SEND FAILED:', sendErr?.message || sendErr);
         throw sendErr;

@@ -1,14 +1,19 @@
 /**
  * Voice Send Helper
  * 
- * Handles the complete flow of converting and sending voice messages:
- * 1. Convert recorded audio to real OGG format via local server
- * 2. If conversion succeeds, send the OGG file
- * 3. If conversion fails (e.g., server not available), fall back to original format
+ * Handles preparing voice messages for sending.
+ * 
+ * On native devices (iOS/Android), the local Express server is NOT reachable
+ * (it runs in the sandbox, not on the user's network). So we skip conversion
+ * and send the original recorded format directly.
+ * 
+ * On web (development), we attempt conversion with a fast timeout.
+ * 
+ * The server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+ * So sending the original AAC/M4A format should work fine.
  */
 
 import { Platform } from 'react-native';
-import { convertAudioToOgg } from './audio-convert';
 
 // Platform-specific MIME type for voice recordings
 const VOICE_MIME_TYPE = Platform.OS === 'ios' ? 'audio/mp4' : 'audio/aac';
@@ -21,8 +26,10 @@ export interface VoiceFileInfo {
 }
 
 /**
- * Prepare a voice recording for sending by converting to OGG format.
- * Falls back to original format if conversion fails.
+ * Prepare a voice recording for sending.
+ * 
+ * On native devices: returns the original file immediately (no conversion attempt).
+ * On web: attempts OGG conversion with a 5-second timeout, falls back to original.
  * 
  * @param originalUri - The URI of the recorded audio file
  * @param baseName - Base name for the file (without extension)
@@ -38,20 +45,37 @@ export async function prepareVoiceForSending(
     originalUri: originalUri.substring(0, 80),
     originalFileName,
     platform: Platform.OS,
+    mimeType: VOICE_MIME_TYPE,
   });
 
+  // On native devices, the conversion server (sandbox Express) is NOT reachable.
+  // Send the original format directly - the server accepts audio/aac and audio/mp4.
+  if (Platform.OS !== 'web') {
+    console.log('[VoiceSend] Native device - sending original format (no conversion needed)');
+    return {
+      uri: originalUri,
+      mimeType: VOICE_MIME_TYPE,
+      fileName: originalFileName,
+    };
+  }
+
+  // Web: attempt conversion with timeout
   try {
-    // Attempt to convert to real OGG format
-    console.log('[VoiceSend] Attempting OGG conversion via local server...');
-    const converted = await convertAudioToOgg(originalUri, originalFileName);
+    const { convertAudioToOgg } = await import('./audio-convert');
     
-    console.log('[VoiceSend] ✅ Conversion successful:', {
-      uri: converted.uri.substring(0, 80),
+    // Race between conversion and a 5-second timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Conversion timeout (5s)')), 5000);
+    });
+
+    const converted = await Promise.race([
+      convertAudioToOgg(originalUri, originalFileName),
+      timeoutPromise,
+    ]);
+
+    console.log('[VoiceSend] ✅ Web conversion successful:', {
       mimeType: converted.mimeType,
       fileName: converted.fileName,
-      originalSize: converted.originalSize,
-      convertedSize: converted.convertedSize,
-      compressionRatio: ((converted.convertedSize / converted.originalSize) * 100).toFixed(1) + '%',
     });
 
     return {
@@ -60,13 +84,7 @@ export async function prepareVoiceForSending(
       fileName: converted.fileName,
     };
   } catch (conversionError: any) {
-    // Conversion failed - fall back to original format
-    console.warn('[VoiceSend] ⚠️ OGG conversion failed, falling back to original format:', conversionError.message);
-    console.log('[VoiceSend] Falling back to:', {
-      mimeType: VOICE_MIME_TYPE,
-      fileName: originalFileName,
-    });
-
+    console.warn('[VoiceSend] ⚠️ Conversion failed/skipped, using original format:', conversionError.message);
     return {
       uri: originalUri,
       mimeType: VOICE_MIME_TYPE,

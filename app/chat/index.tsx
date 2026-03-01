@@ -36,6 +36,7 @@ import { ChatMessage } from '@/lib/types';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
+import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
 
 // Recording preset - platform-specific formats:
 // iOS: MPEG4AAC codec always produces M4A/MP4 container → send as audio/mp4 with .m4a
@@ -149,6 +150,7 @@ export default function ChatScreen() {
   const [galleryImageUrl, setGalleryImageUrl] = useState<string | null>(null);
   const [showCopyMenu, setShowCopyMenu] = useState<{ message: ChatMessage; y: number } | null>(null);
   const [isConvertingAudio, setIsConvertingAudio] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ progress: number; step: string } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
 
@@ -217,19 +219,26 @@ export default function ChatScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        for (const asset of result.assets) {
+        const onProgress = createProgressHandler(setUploadProgress);
+        for (let i = 0; i < result.assets.length; i++) {
+          const asset = result.assets[i];
+          if (result.assets.length > 1) {
+            setUploadProgress({ progress: 0, step: `Image ${i + 1}/${result.assets.length}` });
+          }
           await sendMediaMessage(contactUid, {
             uri: asset.uri,
             mimeType: asset.mimeType || 'image/jpeg',
             fileName: asset.fileName || 'image.jpg',
-          }, 'image');
+          }, 'image', undefined, onProgress);
         }
+        clearProgress(setUploadProgress);
         setTimeout(() => {
           fetchMessages(vendorUid, contactUid, { isRefresh: true });
         }, 1500);
       }
     } catch (e) {
       console.error('Image picker error:', e);
+      setUploadProgress(null);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -245,17 +254,20 @@ export default function ChatScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
+        const onProgress = createProgressHandler(setUploadProgress);
         await sendMediaMessage(contactUid, {
           uri: asset.uri,
           mimeType: asset.mimeType || 'video/mp4',
           fileName: asset.fileName || `video_${Date.now()}.mp4`,
-        }, 'video');
+        }, 'video', undefined, onProgress);
+        clearProgress(setUploadProgress);
         setTimeout(() => {
           fetchMessages(vendorUid, contactUid, { isRefresh: true });
         }, 2000);
       }
     } catch (e) {
       console.error('Video picker error:', e);
+      setUploadProgress(null);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -274,17 +286,20 @@ export default function ChatScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
+        const onProgress = createProgressHandler(setUploadProgress);
         await sendMediaMessage(contactUid, {
           uri: asset.uri,
           mimeType: asset.mimeType || 'image/jpeg',
           fileName: asset.fileName || 'photo.jpg',
-        }, 'image');
+        }, 'image', undefined, onProgress);
+        clearProgress(setUploadProgress);
         setTimeout(() => {
           fetchMessages(vendorUid, contactUid, { isRefresh: true });
         }, 1500);
       }
     } catch (e) {
       console.error('Camera error:', e);
+      setUploadProgress(null);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -298,17 +313,20 @@ export default function ChatScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
+        const onProgress = createProgressHandler(setUploadProgress);
         await sendMediaMessage(contactUid, {
           uri: asset.uri,
           mimeType: asset.mimeType || 'application/octet-stream',
           fileName: asset.name || 'document',
-        }, 'document');
+        }, 'document', undefined, onProgress);
+        clearProgress(setUploadProgress);
         setTimeout(() => {
           fetchMessages(vendorUid, contactUid, { isRefresh: true });
         }, 1500);
       }
     } catch (e) {
       console.error('Document picker error:', e);
+      setUploadProgress(null);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -357,23 +375,24 @@ export default function ChatScreen() {
               text: 'Send Now',
               onPress: async () => {
                 try {
-                  setIsConvertingAudio(true);
-                  // Convert to real OGG format via local server, then send
+                  const onProgress = createProgressHandler(setUploadProgress);
+                  setUploadProgress({ progress: 0, step: 'Preparing voice...' });
+                  // Prepare voice (converts on web, passes through on native)
                   const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
                   console.log('[Recording] Sending voice:', voiceFile);
                   await sendMediaMessage(contactUid, {
                     uri: voiceFile.uri,
                     mimeType: voiceFile.mimeType,
                     fileName: voiceFile.fileName,
-                  }, 'audio');
+                  }, 'audio', undefined, onProgress);
+                  clearProgress(setUploadProgress);
                   setTimeout(() => {
                     fetchMessages(vendorUid, contactUid, { isRefresh: true });
                   }, 1500);
                 } catch (sendErr: any) {
                   console.error('[Recording] Send error:', sendErr);
+                  setUploadProgress(null);
                   Alert.alert('Error', 'Failed to send voice message.');
-                } finally {
-                  setIsConvertingAudio(false);
                 }
               },
             },
@@ -427,23 +446,24 @@ export default function ChatScreen() {
   const handleSendSavedVoice = useCallback(async (voice: SavedVoiceMessage) => {
     setShowSavedVoices(false);
     try {
-      setIsConvertingAudio(true);
-      // Convert saved voice to real OGG format before sending
+      const onProgress = createProgressHandler(setUploadProgress);
+      setUploadProgress({ progress: 0, step: 'Preparing voice...' });
+      // Prepare voice (converts on web, passes through on native)
       const voiceFile = await prepareVoiceForSending(voice.uri, voice.name);
       console.log('[SavedVoice] Sending converted voice:', voiceFile);
       await sendMediaMessage(contactUid, {
         uri: voiceFile.uri,
         mimeType: voiceFile.mimeType,
         fileName: voiceFile.fileName,
-      }, 'audio');
+      }, 'audio', undefined, onProgress);
+      clearProgress(setUploadProgress);
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
       }, 1500);
     } catch (e) {
       console.error('Error sending saved voice:', e);
+      setUploadProgress(null);
       Alert.alert('Error', 'Failed to send voice message. The file may have been deleted.');
-    } finally {
-      setIsConvertingAudio(false);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -644,13 +664,22 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          {isConvertingAudio ? (
-            <View style={styles.recordingBar}>
+        {/* Upload Progress Bar */}
+        {uploadProgress && (
+          <View style={styles.uploadProgressContainer}>
+            <View style={styles.uploadProgressRow}>
               <ActivityIndicator size="small" color="#1A6B3C" />
-              <Text style={[styles.recordingTime, { marginLeft: 8, flex: 1 }]}>Converting voice to OGG...</Text>
+              <Text style={styles.uploadProgressText}>{uploadProgress.step}</Text>
+              <Text style={styles.uploadProgressPercent}>{uploadProgress.progress}%</Text>
             </View>
-          ) : recorderState.isRecording ? (
+            <View style={styles.uploadProgressBarBg}>
+              <View style={[styles.uploadProgressBarFill, { width: `${uploadProgress.progress}%` }]} />
+            </View>
+          </View>
+        )}
+
+        <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          {recorderState.isRecording ? (
             <View style={styles.recordingBar}>
               <TouchableOpacity onPress={handleCancelRecording} style={styles.cancelRecordBtn}>
                 <MaterialIcons name="close" size={24} color="#F5365C" />
@@ -1289,5 +1318,41 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#9BA1A6',
     fontSize: 14,
+  },
+  // Upload Progress Bar
+  uploadProgressContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: '#E5E7EB',
+  },
+  uploadProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 8,
+  },
+  uploadProgressText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1B1B23',
+    fontWeight: '500',
+  },
+  uploadProgressPercent: {
+    fontSize: 13,
+    color: '#1A6B3C',
+    fontWeight: '700',
+  },
+  uploadProgressBarBg: {
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  uploadProgressBarFill: {
+    height: 4,
+    backgroundColor: '#1A6B3C',
+    borderRadius: 2,
   },
 });

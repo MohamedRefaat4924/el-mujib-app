@@ -96,3 +96,5 @@
 - [x] Convert recorded voice to real OGG format before upload (server-side FFmpeg conversion: AAC/M4A → OGG/Opus via /api/convert-audio endpoint)
 - [x] Add comprehensive console logging for all API requests (endpoint, headers, full request body) and responses (📤/📥 emoji prefixed logs for GET, POST, UPLOAD, MULTIPART)
 - [x] Fix upload headers to ensure correct Content-Type for multipart uploads (multipart headers exclude Content-Type so fetch auto-sets boundary)
+- [x] Bug: Voice conversion hangs on "Converting voice to OGG" - Fixed: skip conversion on native devices (sandbox server unreachable from phone), send original AAC/M4A format directly (server accepts it)
+- [x] Add upload progress indicator (green progress bar with percentage above input area, XMLHttpRequest upload.onprogress for real-time tracking, shown for all media types)
