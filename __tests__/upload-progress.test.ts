@@ -43,10 +43,17 @@ describe('Upload Progress Helper', () => {
 });
 
 describe('Voice Send Helper', () => {
-  it('prepareVoiceForSending on native returns original file immediately', async () => {
-    // Mock Platform.OS to be 'ios'
+  it('prepareVoiceForSending returns file with mp3 extension and audio/mpeg mime', async () => {
+    // Mock all native dependencies
     vi.mock('react-native', () => ({
       Platform: { OS: 'ios' },
+    }));
+    vi.mock('expo-file-system/legacy', () => ({
+      uploadAsync: vi.fn(),
+      FileSystemUploadType: { MULTIPART: 0 },
+    }));
+    vi.mock('../lib/services/api', () => ({
+      getAuthToken: vi.fn().mockResolvedValue('test-token'),
     }));
     
     const { prepareVoiceForSending } = await import('../lib/services/voice-send-helper');

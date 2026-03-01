@@ -35,7 +35,7 @@ import { ImageGallery } from '@/components/chat/image-gallery';
 import { ChatMessage } from '@/lib/types';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
+import { sendVoiceViaProxy, prepareVoiceForSending } from '@/lib/services/voice-send-helper';
 import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
 
 // Recording preset - platform-specific formats:
@@ -375,16 +375,15 @@ export default function ChatScreen() {
               text: 'Send Now',
               onPress: async () => {
                 try {
-                  const onProgress = createProgressHandler(setUploadProgress);
                   setUploadProgress({ progress: 0, step: 'Preparing voice...' });
-                  // Prepare voice (converts on web, passes through on native)
-                  const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
-                  console.log('[Recording] Sending voice:', voiceFile);
-                  await sendMediaMessage(contactUid, {
-                    uri: voiceFile.uri,
-                    mimeType: voiceFile.mimeType,
-                    fileName: voiceFile.fileName,
-                  }, 'audio', undefined, onProgress);
+                  // Use server proxy: uploads to our server, converts to MP3, uploads to elmujib.com
+                  console.log('[Recording] Sending voice via proxy...');
+                  await sendVoiceViaProxy(
+                    uri,
+                    contactUid,
+                    '', // no caption
+                    (progress, step) => setUploadProgress({ progress, step }),
+                  );
                   clearProgress(setUploadProgress);
                   setTimeout(() => {
                     fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -392,7 +391,26 @@ export default function ChatScreen() {
                 } catch (sendErr: any) {
                   console.error('[Recording] Send error:', sendErr);
                   setUploadProgress(null);
-                  Alert.alert('Error', 'Failed to send voice message.');
+                  // Fallback: try direct upload with audio/mpeg
+                  try {
+                    console.log('[Recording] Proxy failed, trying direct upload fallback...');
+                    setUploadProgress({ progress: 0, step: 'Retrying...' });
+                    const onProgress = createProgressHandler(setUploadProgress);
+                    const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
+                    await sendMediaMessage(contactUid, {
+                      uri: voiceFile.uri,
+                      mimeType: voiceFile.mimeType,
+                      fileName: voiceFile.fileName,
+                    }, 'audio', undefined, onProgress);
+                    clearProgress(setUploadProgress);
+                    setTimeout(() => {
+                      fetchMessages(vendorUid, contactUid, { isRefresh: true });
+                    }, 1500);
+                  } catch (fallbackErr: any) {
+                    console.error('[Recording] Fallback also failed:', fallbackErr);
+                    setUploadProgress(null);
+                    Alert.alert('Error', 'Failed to send voice message. Please try again.');
+                  }
                 }
               },
             },
@@ -446,24 +464,41 @@ export default function ChatScreen() {
   const handleSendSavedVoice = useCallback(async (voice: SavedVoiceMessage) => {
     setShowSavedVoices(false);
     try {
-      const onProgress = createProgressHandler(setUploadProgress);
       setUploadProgress({ progress: 0, step: 'Preparing voice...' });
-      // Prepare voice (converts on web, passes through on native)
-      const voiceFile = await prepareVoiceForSending(voice.uri, voice.name);
-      console.log('[SavedVoice] Sending converted voice:', voiceFile);
-      await sendMediaMessage(contactUid, {
-        uri: voiceFile.uri,
-        mimeType: voiceFile.mimeType,
-        fileName: voiceFile.fileName,
-      }, 'audio', undefined, onProgress);
+      // Use server proxy: uploads to our server, converts to MP3, uploads to elmujib.com
+      console.log('[SavedVoice] Sending via proxy...');
+      await sendVoiceViaProxy(
+        voice.uri,
+        contactUid,
+        '',
+        (progress, step) => setUploadProgress({ progress, step }),
+      );
       clearProgress(setUploadProgress);
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
       }, 1500);
-    } catch (e) {
-      console.error('Error sending saved voice:', e);
-      setUploadProgress(null);
-      Alert.alert('Error', 'Failed to send voice message. The file may have been deleted.');
+    } catch (proxyErr: any) {
+      console.error('[SavedVoice] Proxy failed:', proxyErr);
+      // Fallback: try direct upload
+      try {
+        console.log('[SavedVoice] Trying direct upload fallback...');
+        setUploadProgress({ progress: 0, step: 'Retrying...' });
+        const onProgress = createProgressHandler(setUploadProgress);
+        const voiceFile = await prepareVoiceForSending(voice.uri, voice.name);
+        await sendMediaMessage(contactUid, {
+          uri: voiceFile.uri,
+          mimeType: voiceFile.mimeType,
+          fileName: voiceFile.fileName,
+        }, 'audio', undefined, onProgress);
+        clearProgress(setUploadProgress);
+        setTimeout(() => {
+          fetchMessages(vendorUid, contactUid, { isRefresh: true });
+        }, 1500);
+      } catch (fallbackErr: any) {
+        console.error('[SavedVoice] Fallback also failed:', fallbackErr);
+        setUploadProgress(null);
+        Alert.alert('Error', 'Failed to send voice message. The file may have been deleted.');
+      }
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
