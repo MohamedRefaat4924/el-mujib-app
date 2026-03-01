@@ -16,8 +16,13 @@
 import { Platform } from 'react-native';
 
 // Platform-specific MIME type for voice recordings
-const VOICE_MIME_TYPE = Platform.OS === 'ios' ? 'audio/mp4' : 'audio/aac';
-const VOICE_EXTENSION = Platform.OS === 'ios' ? '.m4a' : '.aac';
+// The web app converts to MP3 (audio/mpeg) which the server accepts reliably.
+// iOS records as M4A (MPEG4AAC) - we declare audio/mpeg with .mp3 extension
+// because the server's PHP getClientMimeType() uses what we declare,
+// and audio/mpeg is the most reliably accepted format.
+// Android records raw AAC - we also use audio/mpeg with .mp3 for consistency.
+const VOICE_MIME_TYPE = 'audio/mpeg';
+const VOICE_EXTENSION = '.mp3';
 
 export interface VoiceFileInfo {
   uri: string;

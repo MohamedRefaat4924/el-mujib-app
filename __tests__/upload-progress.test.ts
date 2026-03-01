@@ -53,8 +53,8 @@ describe('Voice Send Helper', () => {
     const result = await prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
     
     expect(result.uri).toBe('file:///test/recording.m4a');
-    expect(result.mimeType).toBe('audio/mp4');
-    expect(result.fileName).toBe('voice_123.m4a');
+    expect(result.mimeType).toBe('audio/mpeg');
+    expect(result.fileName).toBe('voice_123.mp3');
     
     vi.restoreAllMocks();
   });

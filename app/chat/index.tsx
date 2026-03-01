@@ -66,11 +66,11 @@ const VOICE_RECORDING_PRESET = {
   },
 };
 
-// Platform-specific MIME type for voice recordings
-// iOS MPEG4AAC → M4A container → audio/mp4
-// Android aac_adts → raw ADTS AAC → audio/aac
-const VOICE_MIME_TYPE = Platform.OS === 'ios' ? 'audio/mp4' : 'audio/aac';
-const VOICE_EXTENSION = Platform.OS === 'ios' ? '.m4a' : '.aac';
+// Voice MIME type for uploads - use audio/mpeg (.mp3) for all platforms
+// The web app converts to MP3 (audio/mpeg) which the server accepts most reliably.
+// PHP's getClientMimeType() uses what we declare in the multipart form data.
+const VOICE_MIME_TYPE = 'audio/mpeg';
+const VOICE_EXTENSION = '.mp3';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

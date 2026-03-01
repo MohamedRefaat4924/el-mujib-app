@@ -98,3 +98,4 @@
 - [x] Fix upload headers to ensure correct Content-Type for multipart uploads (multipart headers exclude Content-Type so fetch auto-sets boundary)
 - [x] Bug: Voice conversion hangs on "Converting voice to OGG" - Fixed: skip conversion on native devices (sandbox server unreachable from phone), send original AAC/M4A format directly (server accepts it)
 - [x] Add upload progress indicator (green progress bar with percentage above input area, XMLHttpRequest upload.onprogress for real-time tracking, shown for all media types)
+- [x] Bug: Voice upload 406 on iOS - Fixed: changed MIME type from audio/mp4 to audio/mpeg with .mp3 extension (matching the web app's successful approach). Also improved MIME mapping fallbacks.

@@ -350,26 +350,30 @@ export async function uploadFile(
     let sanitizedFileName = fileName;
 
     if (uploadUrl.includes('whatsapp_audio') || uploadUrl.includes('audio')) {
+      // Server accepts ONLY: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+      // PHP's getClientMimeType() reads the MIME type from the multipart Content-Disposition.
+      // The web app sends audio/mpeg (.mp3) which works most reliably.
       const acceptedAudioTypes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
       if (!acceptedAudioTypes.includes(mimeType)) {
-        // Map non-accepted types to accepted ones
+        // Map ANY non-accepted type to audio/mpeg (most reliable, matches web app)
         const audioMimeMap: Record<string, string> = {
-          'audio/m4a': 'audio/aac',
-          'audio/x-m4a': 'audio/aac',
-          'audio/mp4a-latm': 'audio/aac',
-          'audio/wav': 'audio/ogg',
-          'audio/x-wav': 'audio/ogg',
+          'audio/m4a': 'audio/mp4',
+          'audio/x-m4a': 'audio/mp4',
+          'audio/mp4a-latm': 'audio/mp4',
+          'audio/wav': 'audio/mpeg',
+          'audio/x-wav': 'audio/mpeg',
           'audio/webm': 'audio/ogg',
           'audio/3gpp': 'audio/amr',
           'audio/3gpp2': 'audio/amr',
-          'audio/caf': 'audio/aac',
-          'audio/x-caf': 'audio/aac',
-          'application/octet-stream': 'audio/aac',
+          'audio/caf': 'audio/mpeg',
+          'audio/x-caf': 'audio/mpeg',
+          'application/octet-stream': 'audio/mpeg',
         };
-        sanitizedMimeType = audioMimeMap[mimeType] || 'audio/aac';
+        sanitizedMimeType = audioMimeMap[mimeType] || 'audio/mpeg';
         console.log(`[Upload] Mapped audio MIME: ${mimeType} → ${sanitizedMimeType}`);
       }
-      // Ensure file extension matches the declared MIME type
+      // ALWAYS ensure file extension matches the declared MIME type
+      // This is critical because PHP may also check the extension
       const mimeToExt: Record<string, string> = {
         'audio/aac': '.aac',
         'audio/mp4': '.m4a',
@@ -386,6 +390,7 @@ export async function uploadFile(
           console.log(`[Upload] Corrected filename: ${fileName} → ${sanitizedFileName}`);
         }
       }
+      console.log(`[Upload] Audio upload - Final MIME: ${sanitizedMimeType}, Final filename: ${sanitizedFileName}`);
     }
     // === UPLOAD REQUEST LOG ===
     console.log(`\n📤 [UPLOAD] ${apiUrl}${uploadUrl}`);
