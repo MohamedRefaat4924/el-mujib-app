@@ -109,3 +109,4 @@
 - [x] Backend: Add audio format conversion in PHP (FFmpeg converts unsupported audio to MP3 before MIME validation)
 - [x] Backend: Add iOS HEIC/HEIF image conversion to JPEG in PHP upload handler (ImageMagick/FFmpeg/Imagick fallback chain)
 - [x] Bug: Fix multipart upload headers - explicitly delete Content-Type from headers, use fetch (not XHR) for audio uploads on iOS for more reliable MIME handling, keep XHR for images/video/docs for progress tracking
+- [x] Configure correct upload keystore (upload-keystore.jks) matching Google Play expected SHA1: 76:E4:8B:62:72:73:6C:95:72:4E:B4:C7:7D:61:0C:A0:A9:D3:05:C9, credentials set as env vars
