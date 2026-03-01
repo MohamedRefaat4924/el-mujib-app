@@ -101,3 +101,4 @@
 - [x] Bug: Voice upload 406 on iOS - Fixed: changed MIME type from audio/mp4 to audio/mpeg with .mp3 extension (matching the web app's successful approach). Also improved MIME mapping fallbacks.
 - [x] Server-side voice proxy: /api/voice-proxy/upload-and-send endpoint converts M4A→MP3 via FFmpeg, then uploads to elmujib.com server-to-server (bypasses iOS MIME issues)
 - [x] Update client voice send flow to use server proxy with fallback to direct upload if proxy fails
+- [x] Bug: Voice proxy hangs on "Uploading to server" - Fixed: exposed Express server publicly via manus proxy URL, added 30s timeout to prevent hanging, auto-derives API URL from Metro bundler URL pattern
