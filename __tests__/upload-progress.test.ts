@@ -43,7 +43,7 @@ describe('Upload Progress Helper', () => {
 });
 
 describe('Voice Send Helper', () => {
-  it('prepareVoiceForSending returns file with mp3 extension and audio/mpeg mime', async () => {
+  it('prepareVoiceForSending returns file with aac extension and audio/aac mime', async () => {
     // Mock all native dependencies
     vi.mock('react-native', () => ({
       Platform: { OS: 'ios' },
@@ -60,8 +60,8 @@ describe('Voice Send Helper', () => {
     const result = await prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
     
     expect(result.uri).toBe('file:///test/recording.m4a');
-    expect(result.mimeType).toBe('audio/mpeg');
-    expect(result.fileName).toBe('voice_123.mp3');
+    expect(result.mimeType).toBe('audio/aac');
+    expect(result.fileName).toBe('voice_123.aac');
     
     vi.restoreAllMocks();
   });

@@ -102,3 +102,6 @@
 - [x] Server-side voice proxy: /api/voice-proxy/upload-and-send endpoint converts M4A→MP3 via FFmpeg, then uploads to elmujib.com server-to-server (bypasses iOS MIME issues)
 - [x] Update client voice send flow to use server proxy with fallback to direct upload if proxy fails
 - [x] Bug: Voice proxy hangs on "Uploading to server" - Fixed: exposed Express server publicly via manus proxy URL, added 30s timeout to prevent hanging, auto-derives API URL from Metro bundler URL pattern
+- [x] Replace voice recording approach: tried react-native-audio-recorder-player (AMR native) but requires dev client, not Expo Go compatible. Reverted to expo-audio with AAC recording + audio/aac MIME type (directly accepted by server).
+- [x] Remove server-side voice proxy approach - now sends AAC directly to elmujib.com with audio/aac MIME type, no proxy/conversion needed
+- [x] Removed react-native-audio-recorder-player and react-native-nitro-modules packages (not Expo Go compatible)

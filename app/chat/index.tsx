@@ -35,22 +35,21 @@ import { ImageGallery } from '@/components/chat/image-gallery';
 import { ChatMessage } from '@/lib/types';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { sendVoiceViaProxy, prepareVoiceForSending } from '@/lib/services/voice-send-helper';
+import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
 import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
 
-// Recording preset - platform-specific formats:
-// iOS: MPEG4AAC codec always produces M4A/MP4 container → send as audio/mp4 with .m4a
-// Android: aac_adts produces raw ADTS AAC bitstream → send as audio/aac with .aac
+// Recording preset - AAC format on both platforms
+// iOS: MPEG4AAC codec produces M4A container
+// Android: aac_adts produces raw ADTS AAC bitstream
 // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+// We declare audio/aac with .aac extension which the server accepts directly.
 const VOICE_RECORDING_PRESET = {
-  // iOS produces M4A regardless of extension, so use .m4a
-  // Android with aac_adts produces raw AAC, use .aac
-  extension: Platform.OS === 'ios' ? '.m4a' : '.aac',
-  sampleRate: 44100,
-  numberOfChannels: 1, // mono for voice messages
-  bitRate: 128000,
+  extension: '.aac',
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  bitRate: 64000,
   android: {
-    outputFormat: 'aac_adts' as const, // Raw AAC bitstream (ADTS)
+    outputFormat: 'aac_adts' as const,
     audioEncoder: 'aac' as const,
   },
   ios: {
@@ -62,15 +61,9 @@ const VOICE_RECORDING_PRESET = {
   },
   web: {
     mimeType: 'audio/webm',
-    bitsPerSecond: 128000,
+    bitsPerSecond: 64000,
   },
 };
-
-// Voice MIME type for uploads - use audio/mpeg (.mp3) for all platforms
-// The web app converts to MP3 (audio/mpeg) which the server accepts most reliably.
-// PHP's getClientMimeType() uses what we declare in the multipart form data.
-const VOICE_MIME_TYPE = 'audio/mpeg';
-const VOICE_EXTENSION = '.mp3';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -154,7 +147,7 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
 
-  // expo-audio recorder hook with custom AAC preset
+  // expo-audio recorder hook with AAC preset
   const audioRecorder = useAudioRecorder(VOICE_RECORDING_PRESET);
   const recorderState = useAudioRecorderState(audioRecorder, 500);
 
@@ -343,12 +336,9 @@ export default function ChatScreen() {
         playsInSilentMode: true,
       });
 
-      // Prepare and start recording with custom AAC preset
-      // On Android: aac_adts output format produces raw AAC bitstream (.aac)
-      // On iOS: MPEG4AAC codec with .aac extension
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
-      console.log('[Recording] Started with AAC preset, extension: .aac');
+      console.log('[Recording] Started with AAC preset');
     } catch (e) {
       console.error('Recording start error:', e);
       Alert.alert('Error', 'Could not start recording. Please check microphone permissions.');
@@ -375,15 +365,16 @@ export default function ChatScreen() {
               text: 'Send Now',
               onPress: async () => {
                 try {
-                  setUploadProgress({ progress: 0, step: 'Preparing voice...' });
-                  // Use server proxy: uploads to our server, converts to MP3, uploads to elmujib.com
-                  console.log('[Recording] Sending voice via proxy...');
-                  await sendVoiceViaProxy(
-                    uri,
-                    contactUid,
-                    '', // no caption
-                    (progress, step) => setUploadProgress({ progress, step }),
-                  );
+                  setUploadProgress({ progress: 0, step: 'Sending voice...' });
+                  const onProgress = createProgressHandler(setUploadProgress);
+                  // AMR file — upload directly, no conversion needed
+                  const voiceFile = prepareVoiceForSending(uri, `voice_${Date.now()}`);
+                  console.log('[Recording] Sending AMR directly:', voiceFile);
+                  await sendMediaMessage(contactUid, {
+                    uri: voiceFile.uri,
+                    mimeType: voiceFile.mimeType,
+                    fileName: voiceFile.fileName,
+                  }, 'audio', undefined, onProgress);
                   clearProgress(setUploadProgress);
                   setTimeout(() => {
                     fetchMessages(vendorUid, contactUid, { isRefresh: true });
@@ -391,26 +382,7 @@ export default function ChatScreen() {
                 } catch (sendErr: any) {
                   console.error('[Recording] Send error:', sendErr);
                   setUploadProgress(null);
-                  // Fallback: try direct upload with audio/mpeg
-                  try {
-                    console.log('[Recording] Proxy failed, trying direct upload fallback...');
-                    setUploadProgress({ progress: 0, step: 'Retrying...' });
-                    const onProgress = createProgressHandler(setUploadProgress);
-                    const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
-                    await sendMediaMessage(contactUid, {
-                      uri: voiceFile.uri,
-                      mimeType: voiceFile.mimeType,
-                      fileName: voiceFile.fileName,
-                    }, 'audio', undefined, onProgress);
-                    clearProgress(setUploadProgress);
-                    setTimeout(() => {
-                      fetchMessages(vendorUid, contactUid, { isRefresh: true });
-                    }, 1500);
-                  } catch (fallbackErr: any) {
-                    console.error('[Recording] Fallback also failed:', fallbackErr);
-                    setUploadProgress(null);
-                    Alert.alert('Error', 'Failed to send voice message. Please try again.');
-                  }
+                  Alert.alert('Error', `Failed to send voice message: ${sendErr.message || 'Unknown error'}`);
                 }
               },
             },
@@ -464,41 +436,24 @@ export default function ChatScreen() {
   const handleSendSavedVoice = useCallback(async (voice: SavedVoiceMessage) => {
     setShowSavedVoices(false);
     try {
-      setUploadProgress({ progress: 0, step: 'Preparing voice...' });
-      // Use server proxy: uploads to our server, converts to MP3, uploads to elmujib.com
-      console.log('[SavedVoice] Sending via proxy...');
-      await sendVoiceViaProxy(
-        voice.uri,
-        contactUid,
-        '',
-        (progress, step) => setUploadProgress({ progress, step }),
-      );
+      setUploadProgress({ progress: 0, step: 'Sending voice...' });
+      const onProgress = createProgressHandler(setUploadProgress);
+      // AMR file — upload directly, no conversion needed
+      const voiceFile = prepareVoiceForSending(voice.uri, voice.name);
+      console.log('[SavedVoice] Sending AMR directly:', voiceFile);
+      await sendMediaMessage(contactUid, {
+        uri: voiceFile.uri,
+        mimeType: voiceFile.mimeType,
+        fileName: voiceFile.fileName,
+      }, 'audio', undefined, onProgress);
       clearProgress(setUploadProgress);
       setTimeout(() => {
         fetchMessages(vendorUid, contactUid, { isRefresh: true });
       }, 1500);
-    } catch (proxyErr: any) {
-      console.error('[SavedVoice] Proxy failed:', proxyErr);
-      // Fallback: try direct upload
-      try {
-        console.log('[SavedVoice] Trying direct upload fallback...');
-        setUploadProgress({ progress: 0, step: 'Retrying...' });
-        const onProgress = createProgressHandler(setUploadProgress);
-        const voiceFile = await prepareVoiceForSending(voice.uri, voice.name);
-        await sendMediaMessage(contactUid, {
-          uri: voiceFile.uri,
-          mimeType: voiceFile.mimeType,
-          fileName: voiceFile.fileName,
-        }, 'audio', undefined, onProgress);
-        clearProgress(setUploadProgress);
-        setTimeout(() => {
-          fetchMessages(vendorUid, contactUid, { isRefresh: true });
-        }, 1500);
-      } catch (fallbackErr: any) {
-        console.error('[SavedVoice] Fallback also failed:', fallbackErr);
-        setUploadProgress(null);
-        Alert.alert('Error', 'Failed to send voice message. The file may have been deleted.');
-      }
+    } catch (err: any) {
+      console.error('[SavedVoice] Send failed:', err);
+      setUploadProgress(null);
+      Alert.alert('Error', `Failed to send voice message: ${err.message || 'Unknown error'}`);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
