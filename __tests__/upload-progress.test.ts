@@ -53,9 +53,9 @@ describe('Voice Send Helper', () => {
     const result = prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
     
     expect(result.uri).toBe('file:///test/recording.m4a');
-    // iOS: M4A container = MP4 audio → audio/mp4
-    expect(result.mimeType).toBe('audio/mp4');
-    expect(result.fileName).toBe('voice_123.m4a');
+    // Always use audio/aac on all platforms (server accepts it)
+    expect(result.mimeType).toBe('audio/aac');
+    expect(result.fileName).toBe('voice_123.aac');
     
     vi.restoreAllMocks();
   });

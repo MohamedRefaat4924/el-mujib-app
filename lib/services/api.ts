@@ -433,45 +433,90 @@ export async function uploadFile(
       } as any);
     }
 
+    // CRITICAL: Ensure NO Content-Type header is set for multipart uploads.
+    // fetch/XHR must auto-set Content-Type: multipart/form-data; boundary=...
+    // If Content-Type is manually set (even to multipart/form-data), the boundary will be missing
+    // and the server won't parse the file, causing 406.
+    delete (headers as any)['Content-Type'];
+    delete (headers as any)['Content-type'];
+    delete (headers as any)['content-type'];
+
     console.log(`📤 [UPLOAD] Sending to ${apiUrl}${uploadUrl}...`);
+    console.log(`📤 [UPLOAD] Final headers (MUST NOT contain Content-Type):`, JSON.stringify(headers, null, 2));
 
-    // Use XMLHttpRequest for upload progress tracking
     const fullUrl = `${apiUrl}${uploadUrl}`;
-    const { text, status, statusText } = await new Promise<{ text: string; status: number; statusText: string }>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', fullUrl, true);
+    const isAudioUpload = uploadUrl.includes('audio');
 
-      // Set headers
-      Object.entries(headers).forEach(([key, value]) => {
-        xhr.setRequestHeader(key, value);
+    let text: string;
+    let status: number;
+    let statusText: string;
+
+    if (isAudioUpload && Platform.OS !== 'web') {
+      // For audio uploads on native: use fetch instead of XHR.
+      // React Native's XHR polyfill on iOS can override the declared MIME type
+      // based on the actual file content, causing 406 errors.
+      // fetch handles FormData MIME types more reliably.
+      console.log(`📤 [UPLOAD] Using fetch for audio upload (more reliable MIME handling on iOS)`);
+      if (options?.onProgress) options.onProgress(30); // Simulate progress since fetch doesn't support it
+      
+      const fetchResponse = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          ...(headers['Authorization'] ? { 'Authorization': headers['Authorization'] } : {}),
+          ...(headers['X-Requested-With'] ? { 'X-Requested-With': headers['X-Requested-With'] } : {}),
+          ...(headers['api-request-signature'] ? { 'api-request-signature': headers['api-request-signature'] } : {}),
+          // DO NOT set Content-Type — let fetch auto-set multipart/form-data with boundary
+        },
+        body: formData,
       });
+      
+      if (options?.onProgress) options.onProgress(80);
+      text = await fetchResponse.text();
+      status = fetchResponse.status;
+      statusText = fetchResponse.statusText;
+    } else {
+      // For non-audio uploads (images, video, docs): use XHR for progress tracking
+      const result = await new Promise<{ text: string; status: number; statusText: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', fullUrl, true);
 
-      // Track upload progress
-      if (xhr.upload && options?.onProgress) {
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            console.log(`📤 [UPLOAD PROGRESS] ${progress}% (${event.loaded}/${event.total})`);
-            options.onProgress!(progress);
-          }
+        // Set headers - explicitly exclude any Content-Type
+        Object.entries(headers).forEach(([key, value]) => {
+          if (key.toLowerCase() === 'content-type') return;
+          xhr.setRequestHeader(key, value);
+        });
+
+        // Track upload progress
+        if (xhr.upload && options?.onProgress) {
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const progress = Math.round((event.loaded / event.total) * 100);
+              console.log(`📤 [UPLOAD PROGRESS] ${progress}% (${event.loaded}/${event.total})`);
+              options.onProgress!(progress);
+            }
+          };
+        }
+
+        xhr.onload = () => {
+          resolve({ text: xhr.responseText, status: xhr.status, statusText: xhr.statusText });
         };
-      }
 
-      xhr.onload = () => {
-        resolve({ text: xhr.responseText, status: xhr.status, statusText: xhr.statusText });
-      };
+        xhr.onerror = () => {
+          reject(new Error(`Upload network error to ${uploadUrl}`));
+        };
 
-      xhr.onerror = () => {
-        reject(new Error(`Upload network error to ${uploadUrl}`));
-      };
+        xhr.ontimeout = () => {
+          reject(new Error(`Upload timeout to ${uploadUrl}`));
+        };
 
-      xhr.ontimeout = () => {
-        reject(new Error(`Upload timeout to ${uploadUrl}`));
-      };
-
-      xhr.timeout = 120000; // 2 minute timeout for large files
-      xhr.send(formData);
-    });
+        xhr.timeout = 120000; // 2 minute timeout for large files
+        xhr.send(formData);
+      });
+      text = result.text;
+      status = result.status;
+      statusText = result.statusText;
+    }
 
     // Report 100% on completion
     if (options?.onProgress) {

@@ -106,3 +106,6 @@
 - [x] Remove server-side voice proxy approach - now sends AAC directly to elmujib.com with audio/aac MIME type, no proxy/conversion needed
 - [x] Removed react-native-audio-recorder-player and react-native-nitro-modules packages (not Expo Go compatible)
 - [x] Bug: 'prepareToRecordAsync' fails on iOS - Fixed: changed sampleRate from 16000 to 44100 and bitRate from 64000 to 128000 (iOS standard). Also use platform-specific MIME: audio/mp4 for iOS (M4A), audio/aac for Android
+- [x] Backend: Add audio format conversion in PHP (FFmpeg converts unsupported audio to MP3 before MIME validation)
+- [x] Backend: Add iOS HEIC/HEIF image conversion to JPEG in PHP upload handler (ImageMagick/FFmpeg/Imagick fallback chain)
+- [x] Bug: Fix multipart upload headers - explicitly delete Content-Type from headers, use fetch (not XHR) for audio uploads on iOS for more reliable MIME handling, keep XHR for images/video/docs for progress tracking
