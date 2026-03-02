@@ -38,19 +38,18 @@ import * as Haptics from 'expo-haptics';
 import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
 import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
 
-// Recording preset - AAC format on both platforms
+// Recording preset - AAC in MP4 container (M4A) on both platforms
 // iOS: MPEG4AAC codec produces M4A container (which is MP4 audio)
-// Android: aac_adts produces raw ADTS AAC bitstream
+// Android: mpeg4 output format produces M4A container (AAC codec in MP4)
 // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
-// iOS M4A files are sent as audio/mp4 (M4A = MP4 audio container)
-// Android AAC files are sent as audio/aac
+// Both platforms produce .m4a files sent as audio/mp4
 const VOICE_RECORDING_PRESET = {
   extension: '.m4a',
   sampleRate: 44100,
   numberOfChannels: 1,
   bitRate: 128000,
   android: {
-    outputFormat: 'aac_adts' as const,
+    outputFormat: 'mpeg4' as const,
     audioEncoder: 'aac' as const,
   },
   ios: {
