@@ -120,4 +120,4 @@
 - [x] Bug: Voice upload on web sends wrong MIME type - server rejects with "Only audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg accepted"
 - [x] Bug: Voice upload still rejected by send-media even with simplified payload matching blade file - fixed by using MediaRecorder API directly with OGG priority
 - [x] Bug: Stop recording button not working on web after switching to MediaRecorder API
-- [ ] Bug: Voice upload still rejected - analyze backend send-media endpoint to find exact MIME validation logic
+- [x] Bug: Voice upload still rejected - fixed by always converting to MP3 via lamejs (Chrome's OGG is actually WebM bytes, PHP finfo_file detects audio/webm)
