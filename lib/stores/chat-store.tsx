@@ -424,18 +424,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const sendPayload: Record<string, string> = {
         contact_uid: contactUid,
+        filepond: 'undefined',
         uploaded_media_file_name: finalFileName || uploadedData?.fileName || fileName,
         media_type: normalizedLabel,
+        raw_upload_data: JSON.stringify(mediaData),
+        caption: caption || '',
       };
-
-      // For audio: match blade file behavior — don't send raw_upload_data or filepond
-      // The blade file only sends: contact_uid, uploaded_media_file_name, media_type
-      // For other types: include raw_upload_data and filepond as Flutter does
-      if (normalizedLabel !== 'audio') {
-        sendPayload.filepond = 'undefined';
-        sendPayload.raw_upload_data = JSON.stringify(mediaData);
-        sendPayload.caption = caption || '';
-      }
       if (onProgress) onProgress(85, 'Sending...');
       console.log('[sendMediaMessage] === STEP 3: send-media ===', JSON.stringify(sendPayload)?.substring(0, 500));
       try {

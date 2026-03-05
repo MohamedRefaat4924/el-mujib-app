@@ -38,6 +38,13 @@ import * as Haptics from 'expo-haptics';
 import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
 import { crossPlatformAlert } from '@/lib/helpers/cross-platform-alert';
 import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
+import {
+  startWebRecording,
+  stopWebRecording,
+  cancelWebRecording,
+  isWebRecording,
+  getWebRecordingDuration,
+} from '@/lib/helpers/web-voice-recorder';
 
 // Recording preset - AAC in MP4 container (M4A) on both platforms
 // iOS: MPEG4AAC codec produces M4A container (which is MP4 audio)
@@ -147,10 +154,18 @@ export default function ChatScreen() {
   const [uploadProgress, setUploadProgress] = useState<{ progress: number; step: string } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const savedRecordingRef = useRef<{ savedUri: string; savedDuration: number } | null>(null);
+  // Web-specific recording state (uses MediaRecorder API directly, matching blade file)
+  const [webIsRecording, setWebIsRecording] = useState(false);
+  const [webRecordingDuration, setWebRecordingDuration] = useState(0);
+  const webTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // expo-audio recorder hook with AAC preset
+  // expo-audio recorder hook with AAC preset (used on native only)
   const audioRecorder = useAudioRecorder(VOICE_RECORDING_PRESET);
   const recorderState = useAudioRecorderState(audioRecorder, 500);
+
+  // Unified recording state: web uses webIsRecording, native uses recorderState.isRecording
+  const isCurrentlyRecording = Platform.OS === 'web' ? webIsRecording : recorderState.isRecording;
+  const currentRecordingDuration = Platform.OS === 'web' ? webRecordingDuration : Math.round(recorderState.durationMillis / 1000);
 
   const contactUid = params.contactUid || '';
   const contactName = params.contactName || 'Unknown';
@@ -325,38 +340,63 @@ export default function ChatScreen() {
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
   const handleStartRecording = useCallback(async () => {
-    try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        crossPlatformAlert('Permission needed', 'Microphone permission is required to record audio.');
-        return;
+    if (Platform.OS === 'web') {
+      // Web: Use MediaRecorder API directly (matching blade file)
+      try {
+        await startWebRecording();
+        setWebIsRecording(true);
+        setWebRecordingDuration(0);
+        webTimerRef.current = setInterval(() => {
+          setWebRecordingDuration(getWebRecordingDuration());
+        }, 500);
+        console.log('[Recording] Web: Started with MediaRecorder API');
+      } catch (e: any) {
+        console.error('Web recording start error:', e);
+        if (e.name === 'NotAllowedError') {
+          crossPlatformAlert('Permission needed', 'Microphone permission is required to record audio. Please allow microphone access in your browser settings.');
+        } else {
+          crossPlatformAlert('Error', 'Could not start recording. Please check microphone permissions.');
+        }
       }
+    } else {
+      // Native: Use expo-audio
+      try {
+        const permission = await requestRecordingPermissionsAsync();
+        if (!permission.granted) {
+          crossPlatformAlert('Permission needed', 'Microphone permission is required to record audio.');
+          return;
+        }
 
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-      });
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
 
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
-      console.log('[Recording] Started with AAC preset');
-    } catch (e) {
-      console.error('Recording start error:', e);
-      crossPlatformAlert('Error', 'Could not start recording. Please check microphone permissions.');
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
+        console.log('[Recording] Native: Started with AAC preset');
+      } catch (e) {
+        console.error('Recording start error:', e);
+        crossPlatformAlert('Error', 'Could not start recording. Please check microphone permissions.');
+      }
     }
   }, [audioRecorder]);
 
   const handleStopRecording = useCallback(async () => {
-    if (!recorderState.isRecording) return;
+    if (!isCurrentlyRecording) return;
 
-    try {
-      const duration = Math.round(recorderState.durationMillis / 1000);
-      await audioRecorder.stop();
-      const uri = audioRecorder.uri;
+    if (Platform.OS === 'web') {
+      // Web: Stop MediaRecorder and get the result
+      try {
+        if (webTimerRef.current) {
+          clearInterval(webTimerRef.current);
+          webTimerRef.current = null;
+        }
+        setWebIsRecording(false);
 
-      console.log('[Recording] Stopped. URI:', uri, 'Duration:', duration, 's');
+        const result = await stopWebRecording();
+        console.log('[Recording] Web stopped. MIME:', result.mimeType, 'Size:', result.blob.size, 'Duration:', result.duration, 's');
 
-      if (uri) {
         // Ask user: Send now or Save for later?
         crossPlatformAlert(
           'Voice Message',
@@ -368,20 +408,18 @@ export default function ChatScreen() {
                 try {
                   setUploadProgress({ progress: 0, step: 'Sending voice...' });
                   const onProgress = createProgressHandler(setUploadProgress);
-                  // Web: converts to MP3 via lamejs. Native: sends M4A directly.
-                  const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
-                  console.log('[Recording] Sending voice:', voiceFile);
+                  console.log('[Recording] Web: Sending voice directly:', result.fileName, result.mimeType);
                   await sendMediaMessage(contactUid, {
-                    uri: voiceFile.uri,
-                    mimeType: voiceFile.mimeType,
-                    fileName: voiceFile.fileName,
+                    uri: result.uri,
+                    mimeType: result.mimeType,
+                    fileName: result.fileName,
                   }, 'audio', undefined, onProgress);
                   clearProgress(setUploadProgress);
                   setTimeout(() => {
                     fetchMessages(vendorUid, contactUid, { isRefresh: true });
                   }, 1500);
                 } catch (sendErr: any) {
-                  console.error('[Recording] Send error:', sendErr);
+                  console.error('[Recording] Web send error:', sendErr);
                   setUploadProgress(null);
                   crossPlatformAlert('Error', `Failed to send voice message: ${sendErr.message || 'Unknown error'}`);
                 }
@@ -392,15 +430,69 @@ export default function ChatScreen() {
               onPress: () => {
                 setIsSavingVoice(true);
                 setSavingVoiceName('');
-                savedRecordingRef.current = { savedUri: uri, savedDuration: duration };
+                savedRecordingRef.current = { savedUri: result.uri, savedDuration: result.duration };
               },
             },
             { text: 'Discard', style: 'destructive' },
           ]
         );
+      } catch (e) {
+        console.error('Web recording stop error:', e);
+        setWebIsRecording(false);
       }
-    } catch (e) {
-      console.error('Recording stop error:', e);
+    } else {
+      // Native: Use expo-audio
+      try {
+        const duration = Math.round(recorderState.durationMillis / 1000);
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
+
+        console.log('[Recording] Native stopped. URI:', uri, 'Duration:', duration, 's');
+
+        if (uri) {
+          crossPlatformAlert(
+            'Voice Message',
+            'What would you like to do with this recording?',
+            [
+              {
+                text: 'Send Now',
+                onPress: async () => {
+                  try {
+                    setUploadProgress({ progress: 0, step: 'Sending voice...' });
+                    const onProgress = createProgressHandler(setUploadProgress);
+                    const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
+                    console.log('[Recording] Native: Sending voice:', voiceFile);
+                    await sendMediaMessage(contactUid, {
+                      uri: voiceFile.uri,
+                      mimeType: voiceFile.mimeType,
+                      fileName: voiceFile.fileName,
+                    }, 'audio', undefined, onProgress);
+                    clearProgress(setUploadProgress);
+                    setTimeout(() => {
+                      fetchMessages(vendorUid, contactUid, { isRefresh: true });
+                    }, 1500);
+                  } catch (sendErr: any) {
+                    console.error('[Recording] Native send error:', sendErr);
+                    setUploadProgress(null);
+                    crossPlatformAlert('Error', `Failed to send voice message: ${sendErr.message || 'Unknown error'}`);
+                  }
+                },
+              },
+              {
+                text: 'Save for Later',
+                onPress: () => {
+                  setIsSavingVoice(true);
+                  setSavingVoiceName('');
+                  savedRecordingRef.current = { savedUri: uri, savedDuration: duration };
+                },
+              },
+              { text: 'Discard', style: 'destructive' },
+            ]
+          );
+        }
+      } catch (e) {
+        console.error('Native recording stop error:', e);
+      }
     }
   }, [audioRecorder, recorderState, contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
@@ -427,10 +519,20 @@ export default function ChatScreen() {
   }, [savingVoiceName, addSavedVoiceMessage]);
 
   const handleCancelRecording = useCallback(async () => {
-    try {
-      await audioRecorder.stop();
-    } catch (e) {
-      console.error('Recording cancel error:', e);
+    if (Platform.OS === 'web') {
+      cancelWebRecording();
+      setWebIsRecording(false);
+      setWebRecordingDuration(0);
+      if (webTimerRef.current) {
+        clearInterval(webTimerRef.current);
+        webTimerRef.current = null;
+      }
+    } else {
+      try {
+        await audioRecorder.stop();
+      } catch (e) {
+        console.error('Recording cancel error:', e);
+      }
     }
   }, [audioRecorder]);
 
@@ -670,14 +772,14 @@ export default function ChatScreen() {
         )}
 
         <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          {recorderState.isRecording ? (
+          {isCurrentlyRecording ? (
             <View style={styles.recordingBar}>
               <TouchableOpacity onPress={handleCancelRecording} style={styles.cancelRecordBtn}>
                 <MaterialIcons name="close" size={24} color="#F5365C" />
               </TouchableOpacity>
               <View style={styles.recordingIndicator}>
                 <View style={styles.recordingDot} />
-                <Text style={styles.recordingTime}>{formatDuration(Math.round(recorderState.durationMillis / 1000))}</Text>
+                <Text style={styles.recordingTime}>{formatDuration(currentRecordingDuration)}</Text>
               </View>
               <TouchableOpacity onPress={handleStopRecording} style={styles.stopRecordBtn}>
                 <MaterialIcons name="stop" size={24} color="#fff" />
