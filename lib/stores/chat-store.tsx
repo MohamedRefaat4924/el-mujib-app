@@ -382,15 +382,35 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const uploadedData = uploadResponse.data;
       console.log('[sendMediaMessage] uploadedData:', JSON.stringify(uploadedData)?.substring(0, 300));
 
-      // Step 3: Send media message matching Flutter's sendMediaN payload exactly
-      // Flutter builds: { contact_uid, filepond: "undefined", uploaded_media_file_name, media_type, raw_upload_data, caption }
-      // Pass through the uploaded data as-is - matching Flutter behavior.
-      // Flutter does NOT modify the upload response data before sending to send-media.
-      // Server accepts: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+      // Step 3: Send media message
+      // For audio on web: match the blade file exactly — it only sends
+      // {contact_uid, uploaded_media_file_name, media_type: 'audio'} with NO raw_upload_data.
+      // The blade file's voice recording uploads via FilePond and then sends just the filename.
+      // For other media types: include raw_upload_data as Flutter does.
       let finalMimeType = uploadedData?.fileMimeType;
       let finalFileName = uploadedData?.fileName;
       let finalExtension = uploadedData?.fileExtension;
       console.log('[sendMediaMessage] Upload response data:', { finalMimeType, finalFileName, finalExtension });
+
+      // For audio uploads: force the MIME type to match what we actually sent
+      // The server may detect the original blob MIME (e.g., audio/webm) instead of the converted MP3
+      if (normalizedLabel === 'audio') {
+        const acceptedAudioMimes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+        if (!acceptedAudioMimes.includes(finalMimeType || '')) {
+          // Override with the MIME type we declared during upload
+          finalMimeType = mimeType; // This is the sanitized MIME from step 2
+          console.log('[sendMediaMessage] Overriding audio MIME in upload data to:', finalMimeType);
+        }
+        // Also fix extension to match
+        const mimeExtMap: Record<string, string> = {
+          'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/aac': '.aac',
+          'audio/ogg': '.ogg', 'audio/amr': '.amr',
+        };
+        if (mimeExtMap[finalMimeType || '']) {
+          finalExtension = mimeExtMap[finalMimeType || ''];
+        }
+      }
+
       const mediaData = {
         message: uploadedData?.message || 'File uploaded successfully.',
         path: uploadedData?.path,
@@ -402,14 +422,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         incident: uploadedData?.incident,
       };
 
-      const sendPayload = {
+      const sendPayload: Record<string, string> = {
         contact_uid: contactUid,
-        filepond: 'undefined',
         uploaded_media_file_name: finalFileName || uploadedData?.fileName || fileName,
         media_type: normalizedLabel,
-        raw_upload_data: JSON.stringify(mediaData),
-        caption: caption || '',
       };
+
+      // For audio: match blade file behavior — don't send raw_upload_data or filepond
+      // The blade file only sends: contact_uid, uploaded_media_file_name, media_type
+      // For other types: include raw_upload_data and filepond as Flutter does
+      if (normalizedLabel !== 'audio') {
+        sendPayload.filepond = 'undefined';
+        sendPayload.raw_upload_data = JSON.stringify(mediaData);
+        sendPayload.caption = caption || '';
+      }
       if (onProgress) onProgress(85, 'Sending...');
       console.log('[sendMediaMessage] === STEP 3: send-media ===', JSON.stringify(sendPayload)?.substring(0, 500));
       try {

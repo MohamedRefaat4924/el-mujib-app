@@ -117,3 +117,4 @@
 - [x] Prevent screen zoom while typing in text inputs
 - [x] Fix voice record alert to show properly in browser
 - [x] Create Plesk-ready static deployment package
+- [x] Bug: Voice upload on web sends wrong MIME type - server rejects with "Only audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg accepted"
