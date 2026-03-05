@@ -383,8 +383,6 @@ export default function ChatScreen() {
   }, [audioRecorder]);
 
   const handleStopRecording = useCallback(async () => {
-    if (!isCurrentlyRecording) return;
-
     if (Platform.OS === 'web') {
       // Web: Stop MediaRecorder and get the result
       try {
@@ -494,7 +492,7 @@ export default function ChatScreen() {
         console.error('Native recording stop error:', e);
       }
     }
-  }, [audioRecorder, recorderState, contactUid, vendorUid, sendMediaMessage, fetchMessages]);
+  }, [audioRecorder, recorderState, webIsRecording, contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
   const handleSaveVoiceMessage = useCallback(async () => {
     const name = savingVoiceName.trim();
