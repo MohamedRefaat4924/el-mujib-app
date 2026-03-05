@@ -20,6 +20,7 @@ import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { registerServiceWorker } from "@/lib/pwa-register";
 import { AuthProvider } from "@/lib/stores/auth-store";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { ContactsProvider } from "@/lib/stores/contacts-store";
 import { ChatProvider } from "@/lib/stores/chat-store";
 
@@ -95,6 +96,7 @@ export default function RootLayout() {
                   <Stack.Screen name="oauth/callback" />
                 </Stack>
                 <StatusBar style="light" />
+                <PwaInstallPrompt />
               </ChatProvider>
             </ContactsProvider>
           </AuthProvider>
