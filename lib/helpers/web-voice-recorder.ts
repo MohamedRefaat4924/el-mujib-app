@@ -226,7 +226,12 @@ export function getWebRecordingDuration(): number {
  *   }
  */
 async function convertBlobToMp3(audioBlob: Blob): Promise<Blob> {
-  const lamejs = await import('lamejs');
+  // Use the global lamejs loaded from CDN (same as blade file)
+  // The npm package's CommonJS require() breaks with Metro bundler (MPEGMode undefined)
+  const lamejs = (window as any).lamejs;
+  if (!lamejs || !lamejs.Mp3Encoder) {
+    throw new Error('lamejs not loaded. Ensure the CDN script is included in +html.tsx');
+  }
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

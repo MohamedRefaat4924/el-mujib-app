@@ -122,3 +122,4 @@
 - [x] Bug: Stop recording button not working on web after switching to MediaRecorder API
 - [x] Bug: Voice upload still rejected - fixed by always converting to MP3 via lamejs (Chrome's OGG is actually WebM bytes, PHP finfo_file detects audio/webm)
 - [x] Add PWA "Add to Home Screen" alert/banner for mobile browser users
+- [ ] Bug: lamejs MPEGMode is not defined error during MP3 conversion on web

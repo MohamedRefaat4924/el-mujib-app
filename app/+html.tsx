@@ -62,6 +62,9 @@ export default function Root({ children }: PropsWithChildren) {
           }}
         />
 
+        {/* lamejs for MP3 encoding - same CDN as blade file */}
+        <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js" />
+
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>
