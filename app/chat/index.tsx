@@ -36,6 +36,7 @@ import { ChatMessage } from '@/lib/types';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { prepareVoiceForSending } from '@/lib/services/voice-send-helper';
+import { crossPlatformAlert } from '@/lib/helpers/cross-platform-alert';
 import { createProgressHandler, clearProgress } from '@/lib/helpers/send-with-progress';
 
 // Recording preset - AAC in MP4 container (M4A) on both platforms
@@ -269,7 +270,7 @@ export default function ChatScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission needed', 'Camera permission is required to take photos.');
+        crossPlatformAlert('Permission needed', 'Camera permission is required to take photos.');
         return;
       }
 
@@ -327,7 +328,7 @@ export default function ChatScreen() {
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission needed', 'Microphone permission is required to record audio.');
+        crossPlatformAlert('Permission needed', 'Microphone permission is required to record audio.');
         return;
       }
 
@@ -341,7 +342,7 @@ export default function ChatScreen() {
       console.log('[Recording] Started with AAC preset');
     } catch (e) {
       console.error('Recording start error:', e);
-      Alert.alert('Error', 'Could not start recording. Please check microphone permissions.');
+      crossPlatformAlert('Error', 'Could not start recording. Please check microphone permissions.');
     }
   }, [audioRecorder]);
 
@@ -357,7 +358,7 @@ export default function ChatScreen() {
 
       if (uri) {
         // Ask user: Send now or Save for later?
-        Alert.alert(
+        crossPlatformAlert(
           'Voice Message',
           'What would you like to do with this recording?',
           [
@@ -367,9 +368,9 @@ export default function ChatScreen() {
                 try {
                   setUploadProgress({ progress: 0, step: 'Sending voice...' });
                   const onProgress = createProgressHandler(setUploadProgress);
-                  // AMR file — upload directly, no conversion needed
-                  const voiceFile = prepareVoiceForSending(uri, `voice_${Date.now()}`);
-                  console.log('[Recording] Sending AMR directly:', voiceFile);
+                  // Web: converts to MP3 via lamejs. Native: sends M4A directly.
+                  const voiceFile = await prepareVoiceForSending(uri, `voice_${Date.now()}`);
+                  console.log('[Recording] Sending voice:', voiceFile);
                   await sendMediaMessage(contactUid, {
                     uri: voiceFile.uri,
                     mimeType: voiceFile.mimeType,
@@ -382,7 +383,7 @@ export default function ChatScreen() {
                 } catch (sendErr: any) {
                   console.error('[Recording] Send error:', sendErr);
                   setUploadProgress(null);
-                  Alert.alert('Error', `Failed to send voice message: ${sendErr.message || 'Unknown error'}`);
+                  crossPlatformAlert('Error', `Failed to send voice message: ${sendErr.message || 'Unknown error'}`);
                 }
               },
             },
@@ -406,7 +407,7 @@ export default function ChatScreen() {
   const handleSaveVoiceMessage = useCallback(async () => {
     const name = savingVoiceName.trim();
     if (!name) {
-      Alert.alert('Name required', 'Please enter a name for this voice message.');
+      crossPlatformAlert('Name required', 'Please enter a name for this voice message.');
       return;
     }
     if (!savedRecordingRef.current?.savedUri) return;
@@ -438,9 +439,9 @@ export default function ChatScreen() {
     try {
       setUploadProgress({ progress: 0, step: 'Sending voice...' });
       const onProgress = createProgressHandler(setUploadProgress);
-      // AMR file — upload directly, no conversion needed
-      const voiceFile = prepareVoiceForSending(voice.uri, voice.name);
-      console.log('[SavedVoice] Sending AMR directly:', voiceFile);
+      // Web: converts to MP3 via lamejs. Native: sends M4A directly.
+      const voiceFile = await prepareVoiceForSending(voice.uri, voice.name);
+      console.log('[SavedVoice] Sending voice:', voiceFile);
       await sendMediaMessage(contactUid, {
         uri: voiceFile.uri,
         mimeType: voiceFile.mimeType,
@@ -453,12 +454,12 @@ export default function ChatScreen() {
     } catch (err: any) {
       console.error('[SavedVoice] Send failed:', err);
       setUploadProgress(null);
-      Alert.alert('Error', `Failed to send voice message: ${err.message || 'Unknown error'}`);
+      crossPlatformAlert('Error', `Failed to send voice message: ${err.message || 'Unknown error'}`);
     }
   }, [contactUid, vendorUid, sendMediaMessage, fetchMessages]);
 
   const handleDeleteSavedVoice = useCallback((voice: SavedVoiceMessage) => {
-    Alert.alert(
+    crossPlatformAlert(
       'Delete Voice Message',
       `Delete "${voice.name}"?`,
       [
@@ -486,7 +487,7 @@ export default function ChatScreen() {
   }, [newQuickReplyText, addQuickReply]);
 
   const handleDeleteQuickReply = useCallback((reply: string) => {
-    Alert.alert(
+    crossPlatformAlert(
       'Delete Quick Reply',
       `Delete "${reply}"?`,
       [
@@ -520,7 +521,7 @@ export default function ChatScreen() {
     }
     const textContent = getMessageTextContent(msg);
     if (textContent) {
-      Alert.alert(
+      crossPlatformAlert(
         'Message Options',
         undefined,
         [

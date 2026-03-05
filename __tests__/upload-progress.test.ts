@@ -50,12 +50,12 @@ describe('Voice Send Helper', () => {
     }));
     
     const { prepareVoiceForSending } = await import('../lib/services/voice-send-helper');
-    const result = prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
+    const result = await prepareVoiceForSending('file:///test/recording.m4a', 'voice_123');
     
     expect(result.uri).toBe('file:///test/recording.m4a');
-    // Always use audio/aac on all platforms (server accepts it)
-    expect(result.mimeType).toBe('audio/aac');
-    expect(result.fileName).toBe('voice_123.aac');
+    // Native uses audio/mp4 with .m4a extension
+    expect(result.mimeType).toBe('audio/mp4');
+    expect(result.fileName).toBe('voice_123.m4a');
     
     vi.restoreAllMocks();
   });

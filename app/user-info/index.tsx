@@ -15,6 +15,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/stores/auth-store';
 import { apiGet, apiPost } from '@/lib/services/api';
+import { crossPlatformAlert } from '@/lib/helpers/cross-platform-alert';
 
 interface TeamMember {
   id: string;
@@ -161,10 +162,10 @@ export default function UserInfoScreen() {
         contact_notes: notes.trim(),
       });
       setIsEditingNotes(false);
-      Alert.alert('Success', 'Notes updated successfully');
+      crossPlatformAlert('Success', 'Notes updated successfully');
     } catch (e) {
       console.error('Error saving notes:', e);
-      Alert.alert('Error', 'Failed to update notes');
+      crossPlatformAlert('Error', 'Failed to update notes');
     } finally {
       setIsSavingNotes(false);
     }
@@ -184,7 +185,7 @@ export default function UserInfoScreen() {
       });
     } catch (e) {
       console.error('Error assigning user:', e);
-      Alert.alert('Error', 'Failed to assign team member');
+      crossPlatformAlert('Error', 'Failed to assign team member');
     } finally {
       setIsSavingAssign(false);
     }
@@ -198,10 +199,10 @@ export default function UserInfoScreen() {
         contactUid: contactUid,
         contact_labels: Array.from(selectedLabels),
       });
-      Alert.alert('Success', 'Labels updated successfully');
+      crossPlatformAlert('Success', 'Labels updated successfully');
     } catch (e) {
       console.error('Error saving labels:', e);
-      Alert.alert('Error', 'Failed to update labels');
+      crossPlatformAlert('Error', 'Failed to update labels');
     } finally {
       setIsSavingLabels(false);
     }

@@ -14,6 +14,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/stores/auth-store';
 import { apiGet, apiPost } from '@/lib/services/api';
+import { crossPlatformAlert } from '@/lib/helpers/cross-platform-alert';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -58,9 +59,9 @@ export default function ProfileScreen() {
         email: email,
       });
       setIsEditing(false);
-      Alert.alert('Success', 'Profile updated successfully');
+      crossPlatformAlert('Success', 'Profile updated successfully');
     } catch (e) {
-      Alert.alert('Error', 'Failed to update profile');
+      crossPlatformAlert('Error', 'Failed to update profile');
     } finally {
       setIsSaving(false);
     }

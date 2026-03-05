@@ -12,13 +12,14 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/stores/auth-store';
 import { disconnectPusher } from '@/lib/services/pusher';
+import { crossPlatformAlert } from '@/lib/helpers/cross-platform-alert';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { state: authState, logout } = useAuth();
 
   const handleLogout = () => {
-    Alert.alert(
+    crossPlatformAlert(
       'Logout',
       'Are you sure you want to logout?',
       [

@@ -112,3 +112,8 @@
 - [x] Configure correct upload keystore (upload-keystore.jks) matching Google Play expected SHA1: 76:E4:8B:62:72:73:6C:95:72:4E:B4:C7:7D:61:0C:A0:A9:D3:05:C9, credentials set as env vars
 - [x] Push project to GitHub repository
 - [x] Fix voice upload: change MIME from audio/aac to audio/mp4, extension from .aac to .m4a, Android outputFormat from aac_adts to mpeg4
+- [x] Match blade file voice upload: record → convert to MP3 via lamejs → upload as audio/mpeg (.mp3)
+- [x] Add PWA support (manifest, service worker, installable)
+- [x] Prevent screen zoom while typing in text inputs
+- [x] Fix voice record alert to show properly in browser
+- [x] Create Plesk-ready static deployment package

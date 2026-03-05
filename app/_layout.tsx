@@ -18,6 +18,7 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
+import { registerServiceWorker } from "@/lib/pwa-register";
 import { AuthProvider } from "@/lib/stores/auth-store";
 import { ContactsProvider } from "@/lib/stores/contacts-store";
 import { ChatProvider } from "@/lib/stores/chat-store";
@@ -38,6 +39,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     initManusRuntime();
+    registerServiceWorker();
   }, []);
 
   const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {
