@@ -121,4 +121,4 @@
 - [x] Bug: Voice upload still rejected by send-media even with simplified payload matching blade file - fixed by using MediaRecorder API directly with OGG priority
 - [x] Bug: Stop recording button not working on web after switching to MediaRecorder API
 - [x] Bug: Voice upload still rejected - fixed by always converting to MP3 via lamejs (Chrome's OGG is actually WebM bytes, PHP finfo_file detects audio/webm)
-- [ ] Add PWA "Add to Home Screen" alert/banner for mobile browser users
+- [x] Add PWA "Add to Home Screen" alert/banner for mobile browser users
